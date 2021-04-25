@@ -15,7 +15,7 @@ import yaml
 try:
     from yaml import CLoader as Loader
 except ImportError:
-    from yaml import Loader
+    from yaml import Loader  # type: ignore
 
 
 DEBUG = False
@@ -27,7 +27,7 @@ def debug(message: Any) -> None:
         click.echo(message)
 
 
-def run_command_full(command: List[str], chdir: str) -> Tuple[int, str, str]:
+def run_command_full(command: List[str], chdir: Path) -> Tuple[int, bytes, bytes]:
     """Run a command and return its exit code, stdout, and stderr."""
     wd = os.getcwd()
     os.chdir(chdir)
@@ -39,7 +39,7 @@ def run_command_full(command: List[str], chdir: str) -> Tuple[int, str, str]:
     return (process.returncode, stdout, stderr)
 
 
-def run_command(command: List[str], chdir: str) -> int:
+def run_command(command: List[str], chdir: Path) -> int:
     """Run a command and return its exit code."""
     return run_command_full(command, chdir)[0]
 
@@ -147,7 +147,7 @@ class RepoManager:
 
         return True
 
-    def clone_or_pull_repo(self, repo_id: str, repo_url: str) -> None:
+    def clone_or_pull_repo(self, repo_id: str, repo_url: str) -> bool:
         """Pull a repository, or clone it if it hasn't been initialized yet."""
         repo_dir = self._dir_from_id(repo_id)
         if self.is_repo(repo_dir):
@@ -176,7 +176,7 @@ def process_config(configuration: Any, working_dir: Path):
         click.echo("")
 
 
-def archive_stale_data(app_names: Set[str], working_dir: str):
+def archive_stale_data(app_names: Set[str], working_dir: Path):
     current_repos = set(x.name for x in (working_dir / "repos").iterdir() if x.is_dir())
     current_data = set(x.name for x in (working_dir / "data").iterdir() if x.is_dir())
 
@@ -211,7 +211,11 @@ def archive_stale_data(app_names: Set[str], working_dir: str):
     "--working_dir",
     default=".",
     type=click.Path(
-        exists=True, file_okay=False, readable=True, writable=True, resolve_path=True,
+        exists=True,
+        file_okay=False,
+        readable=True,
+        writable=True,
+        resolve_path=True,
     ),
     help="The root directory to work in.",
 )
@@ -220,14 +224,14 @@ def cli(config, working_dir: str, debug: bool):
     global DEBUG
     DEBUG = debug
 
-    working_dir = Path(working_dir)
+    workdir = Path(working_dir)
     for directory in ("repos", "data", "archives"):
         # Create the necessary directories.
-        (Path(working_dir) / directory).mkdir(exist_ok=True)
+        (workdir / directory).mkdir(exist_ok=True)
 
     configuration = yaml.load(config, Loader=Loader)
-    archive_stale_data(set(configuration["repositories"].keys()), working_dir)
-    process_config(configuration, working_dir)
+    archive_stale_data(set(configuration["repositories"].keys()), workdir)
+    process_config(configuration, workdir)
 
 
 if __name__ == "__main__":
