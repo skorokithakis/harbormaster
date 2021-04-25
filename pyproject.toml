@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "docker-harbormaster"
-version = "0.1.0"
+version = "0.1.1"
 description = "A supervisor for docker-compose apps."
 authors = ["Stavros Korokithakis <hi@stavros.io>"]
 repository = "https://gitlab.com/stavros/harbormaster"
@@ -9,7 +9,7 @@ license = "AGPL-3.0-or-later"
 readme = "README.md"
 
 [tool.poetry.scripts]
-harbormaster = "harbormaster.cli:cli"
+harbormaster = "docker_harbormaster.cli:cli"
 
 [tool.poetry.dependencies]
 python = "^3.8"

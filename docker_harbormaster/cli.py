@@ -240,6 +240,7 @@ def archive_stale_data(app_names: Set[str], working_dir: Path):
     help="The root directory to work in.",
 )
 @click.option("--debug", is_flag=True, help="Print debug information.")
+@click.version_option()
 def cli(config, working_dir: str, debug: bool):
     global DEBUG
     DEBUG = debug
