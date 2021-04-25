@@ -76,6 +76,9 @@ class RepoManager:
         ):
             raise Exception("Could not set origin.")
 
+        if run_command(["/usr/bin/env", "git", "fetch", "--force"], repo_dir) != 0:
+            raise Exception("Could not fetch from origin.")
+
         return (
             run_command(
                 ["/usr/bin/env", "git", "diff", "--exit-code", "--no-patch", "origin"],
@@ -133,11 +136,8 @@ class RepoManager:
         """
         repo_dir = self._dir_from_id(repo_id)
         if not self.check_for_upstream_changes(repo_dir, repo_url):
-            # No fetching/update necessary.
+            # No update necessary.
             return False
-
-        if run_command(["/usr/bin/env", "git", "fetch", "--force"], repo_dir) != 0:
-            raise Exception("Could not fetch from origin.")
 
         if (
             run_command(["/usr/bin/env", "git", "reset", "--hard", "origin"], repo_dir)
