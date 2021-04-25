@@ -59,14 +59,14 @@ class RepoManager:
             == 0
         )
 
-    def _dir_from_id(self, repo_id: str):
+    def _repo_dir_from_id(self, repo_id: str):
         return self._working_dir / "repos" / repo_id
 
     def check_for_upstream_changes(self, repo_id: str, repo_url: str) -> bool:
         """
         Check upstream for changes and return True if there are some.
         """
-        repo_dir = self._dir_from_id(repo_id)
+        repo_dir = self._repo_dir_from_id(repo_id)
         if (
             run_command(
                 ["/usr/bin/env", "git", "remote", "set-url", "origin", repo_url],
@@ -88,12 +88,12 @@ class RepoManager:
         )
 
     def start_docker(self, repo_id: str):
-        repo_dir = self._dir_from_id(repo_id)
+        repo_dir = self._repo_dir_from_id(repo_id)
         if run_command(["/usr/bin/env", "docker-compose", "up", "-d"], repo_dir) != 0:
             raise Exception("Could not start the docker-compose container.")
 
     def stop_docker(self, repo_id: str):
-        repo_dir = self._dir_from_id(repo_id)
+        repo_dir = self._repo_dir_from_id(repo_id)
         stdout = run_command_full(
             ["/usr/bin/env", "docker-compose", "ps", "-q"], repo_dir
         )[1]
@@ -109,7 +109,19 @@ class RepoManager:
         self.start_docker(repo_id)
 
     def replace_config_vars(self, repo_id: str):
-        pass
+        repo_dir = self._repo_dir_from_id(repo_id)
+        with (repo_dir / "docker-compose.yml").open("r+b") as cfile:
+            contents = cfile.read()
+            contents = contents.replace(
+                b"{{ HM_DATA_DIR }}", str(self._working_dir / "data" / repo_id).encode()
+            )
+            contents = contents.replace(
+                b"{{ HM_CACHE_DIR }}",
+                str(self._working_dir / "caches" / repo_id).encode(),
+            )
+            cfile.truncate(0)
+            cfile.seek(0)
+            cfile.write(contents)
 
     def clone_repo(self, repo_id: str, repo_url: str) -> bool:
         """
@@ -117,7 +129,7 @@ class RepoManager:
 
         Returns whether an update was done.
         """
-        repo_dir = self._dir_from_id(repo_id)
+        repo_dir = self._repo_dir_from_id(repo_id)
         if (
             run_command(
                 ["/usr/bin/env", "git", "clone", repo_url, repo_dir], self._working_dir
@@ -134,7 +146,7 @@ class RepoManager:
 
         Returns whether an update was done.
         """
-        repo_dir = self._dir_from_id(repo_id)
+        repo_dir = self._repo_dir_from_id(repo_id)
         if not self.check_for_upstream_changes(repo_dir, repo_url):
             # No update necessary.
             return False
@@ -149,7 +161,7 @@ class RepoManager:
 
     def clone_or_pull_repo(self, repo_id: str, repo_url: str) -> bool:
         """Pull a repository, or clone it if it hasn't been initialized yet."""
-        repo_dir = self._dir_from_id(repo_id)
+        repo_dir = self._repo_dir_from_id(repo_id)
         if self.is_repo(repo_dir):
             click.echo(f"Pulling {repo_url} to {repo_dir}...")
             return self.pull_repo(repo_dir, repo_url)
@@ -179,6 +191,9 @@ def process_config(configuration: Any, working_dir: Path):
 def archive_stale_data(app_names: Set[str], working_dir: Path):
     current_repos = set(x.name for x in (working_dir / "repos").iterdir() if x.is_dir())
     current_data = set(x.name for x in (working_dir / "data").iterdir() if x.is_dir())
+    current_caches = set(
+        x.name for x in (working_dir / "caches").iterdir() if x.is_dir()
+    )
 
     rm = RepoManager(working_dir)
     for stale_repo in current_repos - app_names:
@@ -196,6 +211,11 @@ def archive_stale_data(app_names: Set[str], working_dir: Path):
         path.rename(
             working_dir / "archives" / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
         )
+
+    for stale_caches in current_caches - app_names:
+        path = working_dir / "caches" / stale_caches
+        click.echo(f"The cache for {stale_caches} is stale, deleting {path}...")
+        shutil.rmtree(path)
 
 
 @click.command()
@@ -225,7 +245,7 @@ def cli(config, working_dir: str, debug: bool):
     DEBUG = debug
 
     workdir = Path(working_dir)
-    for directory in ("repos", "data", "archives"):
+    for directory in ("archives", "caches", "data", "repos"):
         # Create the necessary directories.
         (workdir / directory).mkdir(exist_ok=True)
 
