@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add the "branch" and "compose_filename" config keys. [Stavros Korokithakis]
+
+
 ## v0.1.2 (2021-04-26)
 
 ### Fixes
