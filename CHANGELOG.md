@@ -1,7 +1,7 @@
 # Changelog
 
 
-## Unreleased
+## v0.1.2 (2021-04-26)
 
 ### Fixes
 

@@ -33,8 +33,10 @@ repositories to deploy:
 repositories:
   myapp:
     url: https://github.com/someuser/somerepo.git
+    branch: main
   otherapp:
     url: https://gitlab.com/otheruser/otherrepo.git
+    compose_filename: mydocker-compose.yml
 ```
 
 Then, just run Harbormaster in the same directory as that configuration file.
