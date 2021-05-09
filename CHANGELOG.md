@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add environment variables to the config. [Stavros Korokithakis]
+
+
 ## v0.1.3 (2021-05-06)
 
 ### Features
