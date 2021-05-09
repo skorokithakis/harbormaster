@@ -28,14 +28,15 @@ def debug(message: Any) -> None:
         click.echo(message)
 
 
-class Repository:
-    def __init__(self, id: str, configuration: Dict[str, str]):
-        self.id = id
-        self.url = configuration["url"]
-        self.compose_filename = configuration.get(
+class App:
+    def __init__(self, id: str, configuration: Dict[str, Any]):
+        self.id: str = id
+        self.url: str = configuration["url"]
+        self.compose_filename: str = configuration.get(
             "compose_filename", "docker-compose.yml"
         )
-        self.branch = configuration.get("branch", "master")
+        self.branch: str = configuration.get("branch", "master")
+        self.environment: Dict[str, str] = configuration.get("environment", {})
 
     @property
     def dir(self):
@@ -138,12 +139,21 @@ class Repository:
             return self.clone()
 
 
-def run_command_full(command: List[str], chdir: Path) -> Tuple[int, bytes, bytes]:
+def run_command_full(
+    command: List[str], chdir: Path, environment: Dict[str, str] = None
+) -> Tuple[int, bytes, bytes]:
     """Run a command and return its exit code, stdout, and stderr."""
+    # Include the environment in our command.
+    env = os.environ.copy()
+    if environment:
+        env.update(environment)
+
     wd = os.getcwd()
     os.chdir(chdir)
     debug("Command: " + " ".join([str(x) for x in command]))
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+    )
     stdout, stderr = process.communicate()
     debug(f"Return code: {process.returncode}")
     debug(stdout)
@@ -152,24 +162,27 @@ def run_command_full(command: List[str], chdir: Path) -> Tuple[int, bytes, bytes
     return (process.returncode, stdout, stderr)
 
 
-def run_command(command: List[str], chdir: Path) -> int:
+def run_command(
+    command: List[str], chdir: Path, environment: Dict[str, str] = None
+) -> int:
     """Run a command and return its exit code."""
-    return run_command_full(command, chdir)[0]
+    return run_command_full(command, chdir, environment=environment)[0]
 
 
-class RepoManager:
-    def start_docker(self, repo: Repository):
+class AppManager:
+    def start_docker(self, app: App, environment: Dict[str, str]):
         if (
             run_command(
                 [
                     "/usr/bin/env",
                     "docker-compose",
                     "-f",
-                    repo.compose_filename,
+                    app.compose_filename,
                     "up",
                     "-d",
                 ],
-                repo.dir,
+                app.dir,
+                environment=environment,
             )
             != 0
         ):
@@ -177,11 +190,11 @@ class RepoManager:
 
     def stop_docker(self, repo_id: str):
         """
-        Stop all Docker containers for a repository.
+        Stop all Docker containers for an app.
 
         Instead of issuing `docker-compose down`, this method looks for all
         running containers that start with "{repo_id}_" (that's why it accepts
-        a string instead of a Repository instance).
+        a string instead of an App instance).
 
         That's because the configuration file might be missing, and we might
         not know what the compose file's name is.
@@ -205,11 +218,11 @@ class RepoManager:
         if any(return_codes):
             raise Exception("Could not stop some containers.")
 
-    def restart_docker(self, repo: Repository):
-        self.stop_docker(repo.id)
-        self.start_docker(repo)
+    def restart_docker(self, app: App):
+        self.stop_docker(app.id)
+        self.start_docker(app, environment=app.environment)
 
-    def replace_config_vars(self, repo: Repository):
+    def replace_config_vars(self, repo: App):
         with (repo.dir / repo.compose_filename).open("r+b") as cfile:
             contents = cfile.read()
             contents = contents.replace(
@@ -224,32 +237,32 @@ class RepoManager:
             cfile.write(contents)
 
 
-def process_config(repos: List[Repository]):
+def process_config(apps: List[App], force_restart: bool = False):
     """Process a given configuration file."""
-    rm = RepoManager()
-    for repo in repos:
-        click.echo(f"Updating {repo.id} ({repo.branch})...")
+    rm = AppManager()
+    for app in apps:
+        click.echo(f"Updating {app.id} ({app.branch})...")
         try:
-            if not repo.clone_or_pull():
-                click.echo("Repository does not need updating.\n")
+            if not (app.clone_or_pull() or force_restart):
+                click.echo("App does not need updating.\n")
                 continue
 
-            rm.replace_config_vars(repo)
-            click.echo(f"(Re)starting {repo.id}...")
-            rm.restart_docker(repo)
+            rm.replace_config_vars(app)
+            click.echo(f"(Re)starting {app.id}...")
+            rm.restart_docker(app)
         except Exception as e:
-            click.echo(f"Error while processing {repo.id}: {e}")
+            click.echo(f"Error while processing {app.id}: {e}")
         click.echo("")
 
 
-def archive_stale_data(repos: List[Repository]):
+def archive_stale_data(repos: List[App]):
     app_names = set(repo.id for repo in repos)
 
     current_repos = set(x.name for x in (WORKDIR / "repos").iterdir() if x.is_dir())
     current_data = set(x.name for x in (WORKDIR / "data").iterdir() if x.is_dir())
     current_caches = set(x.name for x in (WORKDIR / "caches").iterdir() if x.is_dir())
 
-    rm = RepoManager()
+    rm = AppManager()
     for stale_repo in current_repos - app_names:
         path = WORKDIR / "repos" / stale_repo
         click.echo(
@@ -282,7 +295,7 @@ def archive_stale_data(repos: List[Repository]):
 )
 @click.option(
     "-d",
-    "--working_dir",
+    "--working-dir",
     default=".",
     type=click.Path(
         exists=True,
@@ -293,9 +306,15 @@ def archive_stale_data(repos: List[Repository]):
     ),
     help="The root directory to work in.",
 )
+@click.option(
+    "-f",
+    "--force-restart",
+    is_flag=True,
+    help="Restart all apps even if their repositories have not changed.",
+)
 @click.option("--debug", is_flag=True, help="Print debug information.")
 @click.version_option()
-def cli(config, working_dir: str, debug: bool):
+def cli(config, working_dir: str, force_restart: bool, debug: bool):
     global DEBUG, WORKDIR
     DEBUG = debug
     WORKDIR = Path(working_dir)
@@ -305,12 +324,12 @@ def cli(config, working_dir: str, debug: bool):
         (WORKDIR / directory).mkdir(exist_ok=True)
 
     configuration = yaml.load(config, Loader=Loader)
-    repos = [
-        Repository(id=repo_id, configuration=repo_config)
-        for repo_id, repo_config in configuration["repositories"].items()
+    apps = [
+        App(id=repo_id, configuration=repo_config)
+        for repo_id, repo_config in configuration["apps"].items()
     ]
-    archive_stale_data(repos)
-    process_config(repos)
+    archive_stale_data(apps)
+    process_config(apps, force_restart=force_restart)
 
 
 if __name__ == "__main__":

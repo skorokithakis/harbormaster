@@ -34,6 +34,9 @@ repositories:
   myapp:
     url: https://github.com/someuser/somerepo.git
     branch: main
+    environment:
+      FOO: bar
+      MYVAR: 1
   otherapp:
     url: https://gitlab.com/otheruser/otherrepo.git
     compose_filename: mydocker-compose.yml
