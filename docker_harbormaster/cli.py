@@ -200,11 +200,38 @@ class AppManager:
         ):
             raise Exception("Could not start the docker-compose container.")
 
-    def stop_docker(self, repo_id: str):
+    def stop_docker(self, repo: App):
+        """
+        Kill all Docker containers for an app.
+
+        Instead of issuing `docker-compose down`, this method looks for all
+        running containers that start with "{repo_id}_" (that's why it accepts
+        a string instead of an App instance).
+
+        That's because the configuration file might be missing, and we might
+        not know what the compose file's name is.
+        """
+        stdout = run_command_full(
+            ["/usr/bin/env", "docker-compose", "ps", "-q"], repo.dir
+        )[1]
+
+        if not stdout:
+            # `docker ps` returned nothing, ie nothing is running.
+            return
+
+        if (
+            run_command(
+                ["/usr/bin/env", "docker-compose", "down", "--remove-orphans"], repo.dir
+            )
+            != 0
+        ):
+            raise Exception("Could not stop the docker-compose container.")
+
+    def kill_orphan_containers(self, repo_id: str):
         """
         Stop all Docker containers for an app.
 
-        Instead of issuing `docker-compose down`, this method looks for all
+        Instead of issuing a `docker-compose down`, this method looks for all
         running containers that start with "{repo_id}_" (that's why it accepts
         a string instead of an App instance).
 
@@ -231,7 +258,7 @@ class AppManager:
             raise Exception("Could not stop some containers.")
 
     def restart_docker(self, app: App):
-        self.stop_docker(app.id)
+        self.stop_docker(app)
         self.start_docker(app, environment=app.environment)
 
     def replace_config_vars(self, app: App):
@@ -286,7 +313,7 @@ def archive_stale_data(repos: List[App]):
         click.echo(
             f"The repo for {stale_repo} is stale, stopping any running containers..."
         )
-        rm.stop_docker(stale_repo)
+        rm.kill_orphan_containers(stale_repo)
         click.echo(f"Removing {path}...")
         shutil.rmtree(path)
 
@@ -307,7 +334,7 @@ def archive_stale_data(repos: List[App]):
 @click.option(
     "-c",
     "--config",
-    default="harbormaster.yaml",
+    default="harbormaster.yml",
     type=click.File("r"),
     help="The configuration file to use.",
 )
