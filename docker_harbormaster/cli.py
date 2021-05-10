@@ -201,19 +201,10 @@ class AppManager:
         ):
             raise Exception("Could not start the docker-compose container.")
 
-    def stop_docker(self, repo: App):
-        """
-        Kill all Docker containers for an app.
-
-        Instead of issuing `docker-compose down`, this method looks for all
-        running containers that start with "{repo_id}_" (that's why it accepts
-        a string instead of an App instance).
-
-        That's because the configuration file might be missing, and we might
-        not know what the compose file's name is.
-        """
+    def stop_docker(self, app: App):
         stdout = run_command_full(
-            ["/usr/bin/env", "docker-compose", "ps", "-q"], repo.dir
+            ["/usr/bin/env", "docker-compose", "-f", app.compose_filename, "ps", "-q"],
+            app.dir,
         )[1]
 
         if not stdout:
@@ -222,7 +213,15 @@ class AppManager:
 
         if (
             run_command(
-                ["/usr/bin/env", "docker-compose", "down", "--remove-orphans"], repo.dir
+                [
+                    "/usr/bin/env",
+                    "docker-compose",
+                    "-f",
+                    app.compose_filename,
+                    "down",
+                    "--remove-orphans",
+                ],
+                app.dir,
             )
             != 0
         ):
@@ -230,7 +229,7 @@ class AppManager:
 
     def kill_orphan_containers(self, repo_id: str):
         """
-        Stop all Docker containers for an app.
+        Kill all Docker containers for an app.
 
         Instead of issuing a `docker-compose down`, this method looks for all
         running containers that start with "{repo_id}_" (that's why it accepts
