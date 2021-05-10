@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Stop containers properly. [Stavros Korokithakis]
+
+
 ## v0.1.7 (2021-05-10)
 
 ### Features
