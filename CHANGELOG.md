@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add "enabled" flag. [Stavros Korokithakis]
+
+
 ## v0.1.6 (2021-05-10)
 
 ### Fixes
