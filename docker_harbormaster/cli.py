@@ -298,7 +298,7 @@ def archive_stale_data(repos: List[App]):
 @click.option(
     "-c",
     "--config",
-    default="config.yaml",
+    default="harbormaster.yaml",
     type=click.File("r"),
     help="The configuration file to use.",
 )
