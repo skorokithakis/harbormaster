@@ -32,14 +32,23 @@ repositories containing `docker-compose.yml` files/apps to deploy:
 ```
 apps:
   myapp:
+    # The git repository URL to clone.
     url: https://github.com/someuser/somerepo.git
+    # Which branch to deploy.
     branch: main
+    # The environment variables to run Compose with.
     environment:
       FOO: bar
       MYVAR: 1
   otherapp:
     url: https://gitlab.com/otheruser/otherrepo.git
+    # The Compose config filename, if it's not docker-compose.yml.
     compose_filename: mydocker-compose.yml
+  oldapp:
+    # This is an old app, so it shouldn't be run.
+    enabled: false
+    # Two apps can use the same repo.
+    url: https://gitlab.com/otheruser/otherrepo.git
 ```
 
 Then, just run Harbormaster in the same directory as that configuration file.

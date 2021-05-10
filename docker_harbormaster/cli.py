@@ -32,6 +32,7 @@ def debug(message: Any) -> None:
 class App:
     def __init__(self, id: str, configuration: Dict[str, Any]):
         self.id: str = id
+        self.enabled: bool = configuration.get("enabled", True)
         self.url: str = configuration["url"]
         self.compose_filename: str = configuration.get(
             "compose_filename", "docker-compose.yml"
@@ -259,7 +260,10 @@ class AppManager:
 
     def restart_docker(self, app: App):
         self.stop_docker(app)
-        self.start_docker(app, environment=app.environment)
+        if app.enabled:
+            self.start_docker(app, environment=app.environment)
+        else:
+            click.echo(f"{app.id} is disabled, will not run.")
 
     def replace_config_vars(self, app: App):
         with (app.dir / app.compose_filename).open("r+b") as cfile:
