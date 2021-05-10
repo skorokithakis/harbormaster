@@ -30,7 +30,7 @@ Harbormaster uses a single YAML configuration file that's basically a list of
 repositories to deploy:
 
 ```
-repositories:
+apps:
   myapp:
     url: https://github.com/someuser/somerepo.git
     branch: main
@@ -78,3 +78,41 @@ volumes:
   - {{ HM_DATA_DIR }}/foo:/home/foo
   - {{ HM_CACHE_DIR }}/my_cache:/some_cache_dir
 ```
+
+
+### Replacements
+
+
+Sometimes, the user needs to give access to paths that already exist on their
+system, or specify more parameters in the Dockerfile. This is where replacements
+come in.
+
+Replacements are basically custom replacement strings (like the data directory
+strings) that you can specify yourself.
+
+For example, if the user needs to specify a directory with their media, you can
+ask them to include a replacement called `MEDIA_DIR` in their Harbormaster
+config file, and then use the string `{{ HM_MEDIA_DIR }}` in your Compose file
+to mount the volume, like so:
+
+```
+volumes:
+  - {{ HM_MEDIA_DIR }}:/some_container_dir
+```
+
+Harbormaster will replace that string wherever in the file it finds it (not
+just the `volumes` section, and the user can specify it in their Harbormaster
+config like so:
+
+
+```
+someapp:
+  url: https://gitlab.com/otheruser/otherrepo.git
+  replacements:
+    MEDIA_DIR: /media/my_media
+```
+
+Keep in mind that if the variable is called VARNAME, the string that will end
+up being replaced is `{{ HM_VARNAME }}`. If the variable is not found, it will
+not be replaced or touched at all. This is to avoid messing with any unrelated
+templates in the Compose file.

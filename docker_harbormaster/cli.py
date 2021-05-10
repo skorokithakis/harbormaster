@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -37,6 +38,7 @@ class App:
         )
         self.branch: str = configuration.get("branch", "master")
         self.environment: Dict[str, str] = configuration.get("environment", {})
+        self.replacements: Dict[str, str] = configuration.get("replacements", {})
 
     @property
     def dir(self):
@@ -179,6 +181,7 @@ class AppManager:
                     "-f",
                     app.compose_filename,
                     "up",
+                    "--remove-orphans",
                     "-d",
                 ],
                 app.dir,
@@ -222,16 +225,22 @@ class AppManager:
         self.stop_docker(app.id)
         self.start_docker(app, environment=app.environment)
 
-    def replace_config_vars(self, repo: App):
-        with (repo.dir / repo.compose_filename).open("r+b") as cfile:
+    def replace_config_vars(self, app: App):
+        with (app.dir / app.compose_filename).open("r+b") as cfile:
             contents = cfile.read()
-            contents = contents.replace(
-                b"{{ HM_DATA_DIR }}", str(WORKDIR / "data" / repo.id).encode()
-            )
-            contents = contents.replace(
-                b"{{ HM_CACHE_DIR }}",
-                str(WORKDIR / "caches" / repo.id).encode(),
-            )
+
+            replacements = {
+                "DATA_DIR": str(WORKDIR / "data" / app.id),
+                "CACHE_DIR": str(WORKDIR / "caches" / app.id),
+            }
+            replacements.update(app.replacements)
+            for varname, replacement in replacements.items():
+                contents = re.sub(
+                    (r"{{\s*HM_%s\s*}}" % varname).encode(),
+                    replacement.encode(),
+                    contents,
+                )
+
             cfile.truncate(0)
             cfile.seek(0)
             cfile.write(contents)
