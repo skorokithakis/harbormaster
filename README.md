@@ -29,7 +29,7 @@ Usage
 Harbormaster uses a single YAML configuration file that's basically a list of
 repositories containing `docker-compose.yml` files/apps to deploy:
 
-```
+```yaml
 apps:
   myapp:
     # The git repository URL to clone.
@@ -85,7 +85,7 @@ repo, and look for the specific strings `{{ HM_DATA_DIR }}` and
 directories (without trailing slashes), so the `volumes` section of your
 Compose file in your repository needs to look something like this:
 
-```
+```yaml
 volumes:
   - {{ HM_DATA_DIR }}/my_data:/some_data_dir
   - {{ HM_DATA_DIR }}/foo:/home/foo
@@ -108,7 +108,7 @@ ask them to include a replacement called `MEDIA_DIR` in their Harbormaster
 config file, and then use the string `{{ HM_MEDIA_DIR }}` in your Compose file
 to mount the volume, like so:
 
-```
+```yaml
 volumes:
   - {{ HM_MEDIA_DIR }}:/some_container_dir
 ```
@@ -118,7 +118,7 @@ just the `volumes` section, and the user can specify it in their Harbormaster
 config like so:
 
 
-```
+```yaml
 someapp:
   url: https://gitlab.com/otheruser/otherrepo.git
   replacements:
