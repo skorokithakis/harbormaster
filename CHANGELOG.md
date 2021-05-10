@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add replacements feature. [Stavros Korokithakis]
+
+
 ## v0.1.4 (2021-05-09)
 
 ### Features
