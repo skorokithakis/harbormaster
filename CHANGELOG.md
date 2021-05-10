@@ -5,6 +5,8 @@
 
 ### Fixes
 
+* Reset repository more forcefully when pulling. [Stavros Korokithakis]
+
 * Rename the default config file. [Stavros Korokithakis]
 
 

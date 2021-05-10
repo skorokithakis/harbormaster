@@ -27,7 +27,7 @@ Usage
 -----
 
 Harbormaster uses a single YAML configuration file that's basically a list of
-repositories to deploy:
+repositories containing `docker-compose.yml` files/apps to deploy:
 
 ```
 apps:
@@ -49,6 +49,10 @@ mentioned in it (and keep them up to date).
 Harbormaster only ever writes to the working directory you specify, and nowhere
 else. All the data for each Compose app is under `<workdir>/data/<appname>`, so
 you can easily back up the entire data directory in one go.
+
+**WARNING:** Make sure the Compose config in each of the repos does not use
+`container_name`, otherwise Harbormaster might not always be able to terminate
+your apps when necessary.
 
 
 Handling data directories
