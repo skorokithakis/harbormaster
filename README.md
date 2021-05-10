@@ -125,7 +125,7 @@ someapp:
     MEDIA_DIR: /media/my_media
 ```
 
-Keep in mind that if the variable is called VARNAME, the string that will end
+Keep in mind that if the variable is called `VARNAME`, the string that will end
 up being replaced is `{{ HM_VARNAME }}`. If the variable is not found, it will
 not be replaced or touched at all. This is to avoid messing with any unrelated
 templates in the Compose file.
