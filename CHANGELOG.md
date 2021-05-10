@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Rename the default config file. [Stavros Korokithakis]
+
+
 ## v0.1.5 (2021-05-10)
 
 ### Features

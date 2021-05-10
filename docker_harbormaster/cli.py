@@ -86,6 +86,15 @@ class App:
         if run_command(["/usr/bin/env", "git", "reset", "--hard"], self.dir) != 0:
             raise Exception("Could not reset local repository.")
 
+        if (
+            run_command(
+                ["/usr/bin/env", "git", "reset", "--hard", f"origin/{self.branch}"],
+                self.dir,
+            )
+            != 0
+        ):
+            raise Exception("Could not reset local repository to the origin.")
+
         if run_command(["/usr/bin/env", "git", "merge", "FETCH_HEAD"], self.dir) != 0:
             raise Exception("Could not check out given branch.")
 
