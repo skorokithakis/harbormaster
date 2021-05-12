@@ -238,6 +238,7 @@ class AppManager:
                     app.compose_filename,
                     "up",
                     "--remove-orphans",
+                    "--build",
                     "-d",
                 ],
                 app.dir,
