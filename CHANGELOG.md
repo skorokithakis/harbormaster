@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Allow retrieving replacements and env vars from files. [Stavros Korokithakis]
+
+
 ## v0.1.8 (2021-05-10)
 
 ### Fixes
