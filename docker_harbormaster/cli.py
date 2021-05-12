@@ -3,11 +3,13 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from time import strftime
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import click
@@ -20,7 +22,6 @@ except ImportError:
 
 
 DEBUG: bool = False
-WORKDIR: Path = Path(".")
 
 
 def debug(message: Any) -> None:
@@ -30,7 +31,13 @@ def debug(message: Any) -> None:
 
 
 class App:
-    def __init__(self, id: str, configuration: Dict[str, Any]):
+    def __init__(
+        self,
+        id: str,
+        configuration: Dict[str, Any],
+        config_filename: Path,
+        workdir: Path,
+    ):
         self.id: str = id
         self.enabled: bool = configuration.get("enabled", True)
         self.url: str = configuration["url"]
@@ -38,12 +45,51 @@ class App:
             "compose_filename", "docker-compose.yml"
         )
         self.branch: str = configuration.get("branch", "master")
-        self.environment: Dict[str, str] = configuration.get("environment", {})
-        self.replacements: Dict[str, str] = configuration.get("replacements", {})
+        self.workdir = workdir
+
+        self.environment: Dict[str, str] = self._read_var_file(
+            configuration.get("environment_file"), config_filename.parent
+        )
+        self.environment.update(configuration.get("environment", {}))
+
+        self.replacements: Dict[str, str] = self._read_var_file(
+            configuration.get("replacements_file", {}), config_filename.parent
+        )
+        self.replacements = configuration.get("replacements", {})
 
     @property
     def dir(self):
-        return WORKDIR / "repos" / self.id
+        return self.workdir / "repos" / self.id
+
+    def _read_var_file(self, filename: Optional[str], base_dir: Path) -> Dict[str, str]:
+        """
+        Read and parse an environment or replacements file.
+
+        Abruptly terminates the program with an error message if the file could
+        not be read.
+        """
+        if not filename:
+            return {}
+
+        f = (base_dir / Path(filename)).resolve()
+        if not f.is_file():
+            sys.exit(
+                f'Environment or replacements file for app "{self.id}" '
+                f"cannot be read, cannot continue:\n{f}"
+            )
+        output = {}
+        contents = f.read_text()
+        for line in contents.split("\n"):
+            if not line:
+                continue
+            if "=" not in line:
+                sys.exit(
+                    f"Environment or replacements file for app {self.id} contained a "
+                    f"line without an equals sign (=), cannot continue:\n{f}"
+                )
+            key, value = line.split("=", maxsplit=1)
+            output[key] = value
+        return output
 
     def is_repo(self) -> bool:
         """Check whether a repository exists and is actually a repository."""
@@ -66,7 +112,7 @@ class App:
         if (
             run_command(
                 ["/usr/bin/env", "git", "clone", "-b", self.branch, self.url, self.dir],
-                WORKDIR,
+                self.workdir,
             )
             != 0
         ):
@@ -269,8 +315,8 @@ class AppManager:
             contents = cfile.read()
 
             replacements = {
-                "DATA_DIR": str(WORKDIR / "data" / app.id),
-                "CACHE_DIR": str(WORKDIR / "caches" / app.id),
+                "DATA_DIR": str(app.workdir / "data" / app.id),
+                "CACHE_DIR": str(app.workdir / "caches" / app.id),
             }
             replacements.update(app.replacements)
             for varname, replacement in replacements.items():
@@ -303,16 +349,16 @@ def process_config(apps: List[App], force_restart: bool = False):
         click.echo("")
 
 
-def archive_stale_data(repos: List[App]):
+def archive_stale_data(repos: List[App], workdir: Path):
     app_names = set(repo.id for repo in repos)
 
-    current_repos = set(x.name for x in (WORKDIR / "repos").iterdir() if x.is_dir())
-    current_data = set(x.name for x in (WORKDIR / "data").iterdir() if x.is_dir())
-    current_caches = set(x.name for x in (WORKDIR / "caches").iterdir() if x.is_dir())
+    current_repos = set(x.name for x in (workdir / "repos").iterdir() if x.is_dir())
+    current_data = set(x.name for x in (workdir / "data").iterdir() if x.is_dir())
+    current_caches = set(x.name for x in (workdir / "caches").iterdir() if x.is_dir())
 
     rm = AppManager()
     for stale_repo in current_repos - app_names:
-        path = WORKDIR / "repos" / stale_repo
+        path = workdir / "repos" / stale_repo
         click.echo(
             f"The repo for {stale_repo} is stale, stopping any running containers..."
         )
@@ -321,14 +367,14 @@ def archive_stale_data(repos: List[App]):
         shutil.rmtree(path)
 
     for stale_data in current_data - app_names:
-        path = WORKDIR / "data" / stale_data
+        path = workdir / "data" / stale_data
         click.echo(f"The data for {stale_data} is stale, archiving {path}...")
         path.rename(
-            WORKDIR / "archives" / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
+            workdir / "archives" / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
         )
 
     for stale_caches in current_caches - app_names:
-        path = WORKDIR / "caches" / stale_caches
+        path = workdir / "caches" / stale_caches
         click.echo(f"The cache for {stale_caches} is stale, deleting {path}...")
         shutil.rmtree(path)
 
@@ -338,7 +384,7 @@ def archive_stale_data(repos: List[App]):
     "-c",
     "--config",
     default="harbormaster.yml",
-    type=click.File("r"),
+    type=click.Path(exists=True, dir_okay=False, readable=True, resolve_path=True),
     help="The configuration file to use.",
 )
 @click.option(
@@ -362,21 +408,26 @@ def archive_stale_data(repos: List[App]):
 )
 @click.option("--debug", is_flag=True, help="Print debug information.")
 @click.version_option()
-def cli(config, working_dir: str, force_restart: bool, debug: bool):
-    global DEBUG, WORKDIR
+def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
+    global DEBUG
     DEBUG = debug
-    WORKDIR = Path(working_dir)
 
+    workdir = Path(working_dir)
     for directory in ("archives", "caches", "data", "repos"):
         # Create the necessary directories.
-        (WORKDIR / directory).mkdir(exist_ok=True)
+        (workdir / directory).mkdir(exist_ok=True)
 
-    configuration = yaml.load(config, Loader=Loader)
+    configuration = yaml.load(open(config), Loader=Loader)
     apps = [
-        App(id=repo_id, configuration=repo_config)
+        App(
+            id=repo_id,
+            configuration=repo_config,
+            config_filename=Path(config),
+            workdir=workdir,
+        )
         for repo_id, repo_config in configuration["apps"].items()
     ]
-    archive_stale_data(apps)
+    archive_stale_data(apps, workdir)
     process_config(apps, force_restart=force_restart)
 
 

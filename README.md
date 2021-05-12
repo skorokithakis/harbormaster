@@ -5,8 +5,7 @@ Harbormaster is a small utility that lets you easily deploy multiple
 Docker-Compose applications.
 
 
-Installation
-------------
+## Installation
 
 Installing Harbormaster is simple. You can use `pipx` (recommended):
 
@@ -23,8 +22,7 @@ $ pip install docker-harbormaster
 You need to also make sure you have `git` installed on your system.
 
 
-Usage
------
+## Usage
 
 Harbormaster uses a single YAML configuration file that's basically a list of
 repositories containing `docker-compose.yml` files/apps to deploy:
@@ -40,10 +38,22 @@ apps:
     environment:
       FOO: bar
       MYVAR: 1
+    # A file to load environment variables from. The file must consist of lines
+    # in the form of key=value. The filename is relative to the Harbormaster
+    # config file (this file).
+    # Variables in the `environment` key above take precedence over variables
+    # in the file.
+    environment_file: "somefile.txt"
   otherapp:
     url: https://gitlab.com/otheruser/otherrepo.git
     # The Compose config filename, if it's not docker-compose.yml.
     compose_filename: mydocker-compose.yml
+    # A dictionary of replacements (see below).
+    replacements:
+      MYVOLUMENAME: volume
+    # A file containing replacements. Works in the exact same way as the
+    # `environment_file` above.
+    replacements_file: "otherfile.txt"
   oldapp:
     # This is an old app, so it shouldn't be run.
     enabled: false
@@ -64,8 +74,7 @@ you can easily back up the entire data directory in one go.
 your apps when necessary.
 
 
-Handling data directories
--------------------------
+## Handling data directories
 
 Due to the way Compose files work, you need to do some extra work to properly
 tell Harbormaster about your volumes.
@@ -94,7 +103,6 @@ volumes:
 
 
 ### Replacements
-
 
 Sometimes, the user needs to give access to paths that already exist on their
 system, or specify more parameters in the Dockerfile. This is where replacements
@@ -129,3 +137,7 @@ Keep in mind that if the variable is called `VARNAME`, the string that will end
 up being replaced is `{{ HM_VARNAME }}`. If the variable is not found, it will
 not be replaced or touched at all. This is to avoid messing with any unrelated
 templates in the Compose file.
+
+Also, note that replacements will be written on disk, in the Compose config
+file. If, for some reason, you want to avoid that (e.g. if you have secrets you
+don't want exposed), try to use environment variables instead.
