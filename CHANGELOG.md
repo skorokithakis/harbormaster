@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+### Features
+
+* Show better error messages. [Stavros Korokithakis]
+
 ### Fixes
 
 * Fix erroneous overwriting of replacements. [Stavros Korokithakis]
