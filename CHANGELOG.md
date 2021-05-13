@@ -5,6 +5,8 @@
 
 ### Fixes
 
+* Fix error when environment variables are not strings. [Stavros Korokithakis]
+
 * Build containers when starting. [Stavros Korokithakis]
 
 

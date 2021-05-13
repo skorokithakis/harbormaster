@@ -60,7 +60,9 @@ class App:
         self.replacements: Dict[str, str] = self._read_var_file(
             configuration.get("replacements_file", {}), config_filename.parent
         )
-        self.replacements = configuration.get("replacements", {})
+        self.replacements.update(
+            {key: str(value) for key, value in configuration.get("replacements", {})}
+        )
 
     @property
     def dir(self):
