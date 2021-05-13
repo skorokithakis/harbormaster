@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Build containers when starting. [Stavros Korokithakis]
+
+
 ## v0.1.9 (2021-05-12)
 
 ### Features

@@ -50,7 +50,12 @@ class App:
         self.environment: Dict[str, str] = self._read_var_file(
             configuration.get("environment_file"), config_filename.parent
         )
-        self.environment.update(configuration.get("environment", {}))
+        self.environment.update(
+            {
+                key: str(value)
+                for key, value in configuration.get("environment", {}).items()
+            }
+        )
 
         self.replacements: Dict[str, str] = self._read_var_file(
             configuration.get("replacements_file", {}), config_filename.parent
