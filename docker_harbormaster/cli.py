@@ -236,24 +236,25 @@ def run_command(
 
 class AppManager:
     def start_docker(self, app: App, environment: Dict[str, str]):
-        if (
-            run_command(
-                [
-                    "/usr/bin/env",
-                    "docker-compose",
-                    "-f",
-                    app.compose_filename,
-                    "up",
-                    "--remove-orphans",
-                    "--build",
-                    "-d",
-                ],
-                app.dir,
-                environment=environment,
+        status, stdout, stderr = run_command_full(
+            [
+                "/usr/bin/env",
+                "docker-compose",
+                "-f",
+                app.compose_filename,
+                "up",
+                "--remove-orphans",
+                "--build",
+                "-d",
+            ],
+            app.dir,
+            environment=environment,
+        )
+
+        if status != 0:
+            raise Exception(
+                f"Could not start the docker-compose container:\n{stderr.decode()}"
             )
-            != 0
-        ):
-            raise Exception("Could not start the docker-compose container.")
 
     def stop_docker(self, app: App):
         stdout = run_command_full(
