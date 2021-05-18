@@ -61,7 +61,10 @@ class App:
             configuration.get("replacements_file", {}), config_filename.parent
         )
         self.replacements.update(
-            {key: str(value) for key, value in configuration.get("replacements", {})}
+            {
+                key: str(value)
+                for key, value in configuration.get("replacements", {}).items()
+            }
         )
 
     @property
