@@ -149,6 +149,23 @@ class App:
                 "docker-compose",
                 "-f",
                 self.compose_filename,
+                "pull",
+            ],
+            self.dir,
+            environment=self.environment,
+        )
+
+        if status != 0:
+            raise Exception(
+                f"Could not pull the docker-compose image:\n{stderr.decode()}"
+            )
+
+        status, stdout, stderr = run_command_full(
+            [
+                "/usr/bin/env",
+                "docker-compose",
+                "-f",
+                self.compose_filename,
                 "up",
                 "--remove-orphans",
                 "--build",
