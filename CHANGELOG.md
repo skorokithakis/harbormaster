@@ -7,6 +7,10 @@
 
 * Add the HM_REPO_DIR variable. [Stavros Korokithakis]
 
+### Fixes
+
+* Improve starting/stopping of apps. [Stavros Korokithakis]
+
 
 ## v0.1.10 (2021-05-13)
 
