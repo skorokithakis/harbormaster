@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add the HM_REPO_DIR variable. [Stavros Korokithakis]
+
+
 ## v0.1.10 (2021-05-13)
 
 ### Features

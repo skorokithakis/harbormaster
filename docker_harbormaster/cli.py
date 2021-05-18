@@ -118,6 +118,72 @@ class App:
             == 0
         )
 
+    def is_running(self) -> bool:
+        """Check if the app is running."""
+        stdout = run_command_full(
+            [
+                "/usr/bin/env",
+                "docker-compose",
+                "-f",
+                self.compose_filename,
+                "ps",
+                "--services",
+                "--filter",
+                "status=running",
+            ],
+            self.dir,
+        )[1].strip()
+
+        if stdout:
+            debug(f"{self.id} is running.")
+        else:
+            debug(f"{self.id} is NOT running.")
+        # If `docker ps` returned nothing, nothing is running.
+        return bool(stdout)
+
+    def start(self):
+        """Start the Docker containers for this app."""
+        status, stdout, stderr = run_command_full(
+            [
+                "/usr/bin/env",
+                "docker-compose",
+                "-f",
+                self.compose_filename,
+                "up",
+                "--remove-orphans",
+                "--build",
+                "-d",
+            ],
+            self.dir,
+            environment=self.environment,
+        )
+
+        if status != 0:
+            raise Exception(
+                f"Could not start the docker-compose container:\n{stderr.decode()}"
+            )
+
+    def stop(self):
+        if not self.is_running():
+            # `docker ps` returned nothing, ie nothing is running.
+            return
+
+        if (
+            run_command(
+                [
+                    "/usr/bin/env",
+                    "docker-compose",
+                    "-f",
+                    self.compose_filename,
+                    "down",
+                    "--remove-orphans",
+                ],
+                self.dir,
+            )
+            != 0
+        ):
+            raise Exception("Could not stop the docker-compose container.")
+
     def clone(self) -> bool:
         """
         Clone a repository.
@@ -243,53 +309,6 @@ def run_command(
 
 
 class AppManager:
-    def start_docker(self, app: App, environment: Dict[str, str]):
-        status, stdout, stderr = run_command_full(
-            [
-                "/usr/bin/env",
-                "docker-compose",
-                "-f",
-                app.compose_filename,
-                "up",
-                "--remove-orphans",
-                "--build",
-                "-d",
-            ],
-            app.dir,
-            environment=environment,
-        )
-
-        if status != 0:
-            raise Exception(
-                f"Could not start the docker-compose container:\n{stderr.decode()}"
-            )
-
-    def stop_docker(self, app: App):
-        stdout = run_command_full(
-            ["/usr/bin/env", "docker-compose", "-f", app.compose_filename, "ps", "-q"],
-            app.dir,
-        )[1]
-
-        if not stdout:
-            # `docker ps` returned nothing, ie nothing is running.
-            return
-
-        if (
-            run_command(
-                [
-                    "/usr/bin/env",
-                    "docker-compose",
-                    "-f",
-                    app.compose_filename,
-                    "down",
-                    "--remove-orphans",
-                ],
-                app.dir,
-            )
-            != 0
-        ):
-            raise Exception("Could not stop the docker-compose container.")
-
     def kill_orphan_containers(self, repo_id: str):
         """
         Kill all Docker containers for an app.
@@ -320,13 +339,6 @@ class AppManager:
         if any(return_codes):
             raise Exception("Could not stop some containers.")
 
-    def restart_docker(self, app: App):
-        self.stop_docker(app)
-        if app.enabled:
-            self.start_docker(app, environment=app.environment)
-        else:
-            click.echo(f"{app.id} is disabled, will not run.")
-
     def replace_config_vars(self, app: App):
         with (app.dir / app.compose_filename).open("r+b") as cfile:
             contents = cfile.read()
@@ -355,15 +367,28 @@ def process_config(apps: List[App], force_restart: bool = False):
     for app in apps:
         click.echo(f"Updating {app.id} ({app.branch})...")
         try:
-            if not (app.clone_or_pull() or force_restart):
-                click.echo("App does not need updating.\n")
-                continue
+            updated_repo = app.clone_or_pull()
+            if updated_repo:
+                click.echo(f"{app.id}: Repo was updated.")
 
-            rm.replace_config_vars(app)
-            click.echo(f"(Re)starting {app.id}...")
-            rm.restart_docker(app)
+            # The app needs to be restarted, or is not enabled, so stop it.
+            if updated_repo or force_restart or not app.enabled:
+                click.echo(f"{app.id}: Stopping...")
+                app.stop()
+                stopped: Optional[bool] = True
+            else:
+                stopped = None
+
+            # The app is not running and it should be, so start it.
+            if app.enabled and (stopped or not app.is_running()):
+                rm.replace_config_vars(app)
+                app.start()
+                click.echo(f"{app.id}: Starting...")
+            else:
+                click.echo(f"{app.id}: App does not need to be started.")
+
         except Exception as e:
-            click.echo(f"Error while processing {app.id}: {e}")
+            click.echo(f"{app.id}: Error while processing: {e}")
         click.echo("")
 
 
