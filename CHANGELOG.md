@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Pull images before starting app. [Stavros Korokithakis]
+
+
 ## v0.1.12 (2021-05-18)
 
 ### Features
