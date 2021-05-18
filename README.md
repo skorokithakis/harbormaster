@@ -89,10 +89,18 @@ Cache is anything you don't care about. When you remove an app from the config,
 the cache dir is deleted.
 
 Harbormaster will look for a file called `docker-compose.yml` at the root of the
-repo, and look for the specific strings `{{ HM_DATA_DIR }}` and
-`{{ HM_CACHE_DIR }}` in it. It will replace those strings with the proper
-directories (without trailing slashes), so the `volumes` section of your
-Compose file in your repository needs to look something like this:
+repo, and look for some specific strings (you read more about this in the
+"replacements" section below).
+
+The built-in strings to be replaced are:
+
+* `{{ HM_DATA_DIR }}`
+* `{{ HM_CACHE_DIR }}`
+* `{{ HM_REPO_DIR }}`
+
+They will be replaced with the proper directory names (without trailing
+slashes), so the `volumes` section of your Compose file in your repository
+should look something like this:
 
 ```yaml
 volumes:

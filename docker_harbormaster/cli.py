@@ -23,6 +23,11 @@ except ImportError:
 
 DEBUG: bool = False
 
+ARCHIVES_DIR_NAME = "archives"
+REPOS_DIR_NAME = "repos"
+CACHES_DIR_NAME = "caches"
+DATA_DIR_NAME = "data"
+
 
 def debug(message: Any) -> None:
     """Print a message if DEBUG is True."""
@@ -69,7 +74,7 @@ class App:
 
     @property
     def dir(self):
-        return self.workdir / "repos" / self.id
+        return self.workdir / REPOS_DIR_NAME / self.id
 
     def _read_var_file(self, filename: Optional[str], base_dir: Path) -> Dict[str, str]:
         """
@@ -327,8 +332,9 @@ class AppManager:
             contents = cfile.read()
 
             replacements = {
-                "DATA_DIR": str(app.workdir / "data" / app.id),
-                "CACHE_DIR": str(app.workdir / "caches" / app.id),
+                "DATA_DIR": str(app.workdir / DATA_DIR_NAME / app.id),
+                "CACHE_DIR": str(app.workdir / CACHES_DIR_NAME / app.id),
+                "REPO_DIR": str(app.workdir / REPOS_DIR_NAME / app.id),
             }
             replacements.update(app.replacements)
             for varname, replacement in replacements.items():
@@ -364,13 +370,19 @@ def process_config(apps: List[App], force_restart: bool = False):
 def archive_stale_data(repos: List[App], workdir: Path):
     app_names = set(repo.id for repo in repos)
 
-    current_repos = set(x.name for x in (workdir / "repos").iterdir() if x.is_dir())
-    current_data = set(x.name for x in (workdir / "data").iterdir() if x.is_dir())
-    current_caches = set(x.name for x in (workdir / "caches").iterdir() if x.is_dir())
+    current_repos = set(
+        x.name for x in (workdir / REPOS_DIR_NAME).iterdir() if x.is_dir()
+    )
+    current_data = set(
+        x.name for x in (workdir / DATA_DIR_NAME).iterdir() if x.is_dir()
+    )
+    current_caches = set(
+        x.name for x in (workdir / CACHES_DIR_NAME).iterdir() if x.is_dir()
+    )
 
     rm = AppManager()
     for stale_repo in current_repos - app_names:
-        path = workdir / "repos" / stale_repo
+        path = workdir / REPOS_DIR_NAME / stale_repo
         click.echo(
             f"The repo for {stale_repo} is stale, stopping any running containers..."
         )
@@ -379,14 +391,16 @@ def archive_stale_data(repos: List[App], workdir: Path):
         shutil.rmtree(path)
 
     for stale_data in current_data - app_names:
-        path = workdir / "data" / stale_data
+        path = workdir / DATA_DIR_NAME / stale_data
         click.echo(f"The data for {stale_data} is stale, archiving {path}...")
         path.rename(
-            workdir / "archives" / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
+            workdir
+            / ARCHIVES_DIR_NAME
+            / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
         )
 
     for stale_caches in current_caches - app_names:
-        path = workdir / "caches" / stale_caches
+        path = workdir / CACHES_DIR_NAME / stale_caches
         click.echo(f"The cache for {stale_caches} is stale, deleting {path}...")
         shutil.rmtree(path)
 
@@ -425,7 +439,12 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
     DEBUG = debug
 
     workdir = Path(working_dir)
-    for directory in ("archives", "caches", "data", "repos"):
+    for directory in (
+        ARCHIVES_DIR_NAME,
+        CACHES_DIR_NAME,
+        DATA_DIR_NAME,
+        REPOS_DIR_NAME,
+    ):
         # Create the necessary directories.
         (workdir / directory).mkdir(exist_ok=True)
 
