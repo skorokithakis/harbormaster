@@ -378,9 +378,10 @@ class AppManager:
             cfile.write(contents)
 
 
-def process_config(apps: List[App], force_restart: bool = False):
+def process_config(apps: List[App], force_restart: bool = False) -> bool:
     """Process a given configuration file."""
     rm = AppManager()
+    successes = []
     for app in apps:
         click.echo(f"Updating {app.id} ({app.branch})...")
         try:
@@ -403,10 +404,13 @@ def process_config(apps: List[App], force_restart: bool = False):
                 click.echo(f"{app.id}: Starting...")
             else:
                 click.echo(f"{app.id}: App does not need to be started.")
-
+            successes.append(True)
         except Exception as e:
             click.echo(f"{app.id}: Error while processing: {e}")
+            successes.append(False)
         click.echo("")
+
+    return all(successes)
 
 
 def archive_stale_data(repos: List[App], workdir: Path):
@@ -501,7 +505,8 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
         for repo_id, repo_config in configuration["apps"].items()
     ]
     archive_stale_data(apps, workdir)
-    process_config(apps, force_restart=force_restart)
+    success = process_config(apps, force_restart=force_restart)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":
