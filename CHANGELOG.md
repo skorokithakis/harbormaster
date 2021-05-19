@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Exit with a 1 if any of the apps failed to deploy. [Stavros Korokithakis]
+
+
 ## v0.1.13 (2021-05-18)
 
 ### Fixes
