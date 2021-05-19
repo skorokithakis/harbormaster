@@ -4,6 +4,10 @@ Harbormaster
 Harbormaster is a small utility that lets you easily deploy multiple
 Docker-Compose applications.
 
+It does this by taking a list of git repository URLs that contain Docker
+Compose files and running the Compose apps they contain. It will also handle
+updating/restarting the apps when the repositories change.
+
 
 ## Installation
 
