@@ -153,3 +153,27 @@ templates in the Compose file.
 Also, note that replacements will be written on disk, in the Compose config
 file. If, for some reason, you want to avoid that (e.g. if you have secrets you
 don't want exposed), try to use environment variables instead.
+
+
+## Bundled apps
+
+Harbormaster includes some built-in apps in its repository, for your
+convenience. Check out the [apps](apps) directory for the Compose files. You
+can include them in your Harbormaster config directly, with no other
+configuration.
+
+Here's an example that includes the [Plex media server](https://www.plex.tv/):
+
+```yaml
+apps:
+  plex:
+    url: https://gitlab.com/stavros/harbormaster.git
+    compose_filename: apps/plex-bridge.yml
+    environment:
+      ADVERTISE_IP: "<the IP to advertise>"
+      TZ: "<your timezone, e.g. Europe/Athens>"
+      PLEX_CLAIM: "<your Plex claim code>"
+    replacements:
+      HOSTNAME: "<your hostname>"
+      MEDIA_DIR: "<your video directory on the host>"
+```
