@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from time import strftime
 from typing import Any
@@ -27,6 +28,9 @@ ARCHIVES_DIR_NAME = "archives"
 REPOS_DIR_NAME = "repos"
 CACHES_DIR_NAME = "caches"
 DATA_DIR_NAME = "data"
+
+MAX_GIT_NETWORK_ATTEMPTS = 3
+RETRY_WAIT_SECONDS = 10
 
 
 def debug(message: Any) -> None:
@@ -287,12 +291,22 @@ class App:
 
     def clone_or_pull(self) -> bool:
         """Pull a repository, or clone it if it hasn't been initialized yet."""
-        if self.is_repo():
-            click.echo(f"Pulling {self.url} to {self.dir}...")
-            return self.pull()
+        for i in range(MAX_GIT_NETWORK_ATTEMPTS):
+            try:
+                if self.is_repo():
+                    click.echo(f"Pulling {self.url} to {self.dir}...")
+                    return self.pull()
+                else:
+                    click.echo(f"Cloning {self.url} to {self.dir}...")
+                    return self.clone()
+            except Exception as e:
+                last_exception = e
+                if i < MAX_GIT_NETWORK_ATTEMPTS - 1:
+                    click.echo(f"Error with git clone/pull request: {e}")
+                    click.echo(f"Will retry after {RETRY_WAIT_SECONDS} seconds.")
+                    time.sleep(RETRY_WAIT_SECONDS)
         else:
-            click.echo(f"Cloning {self.url} to {self.dir}...")
-            return self.clone()
+            raise last_exception
 
 
 def run_command_full(

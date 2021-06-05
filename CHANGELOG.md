@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add bundled apps. [Stavros Korokithakis]
+
+
 ## v0.1.14 (2021-05-19)
 
 ### Fixes
