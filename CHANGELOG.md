@@ -5,6 +5,10 @@
 
 ### Features
 
+* Change `compose_filename` to `compose_config` [Stavros Korokithakis]
+
+* Retry git operations on failure. [Ali Piccioni]
+
 * Add bundled apps. [Stavros Korokithakis]
 
 
