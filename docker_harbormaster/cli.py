@@ -50,9 +50,11 @@ class App:
         self.id: str = id
         self.enabled: bool = configuration.get("enabled", True)
         self.url: str = configuration["url"]
-        self.compose_filename: str = configuration.get(
-            "compose_filename", "docker-compose.yml"
-        )
+        cfn = configuration.get("compose_config", ["docker-compose.yml"])
+        if isinstance(cfn, str):
+            # If the filename is a string, we should turn it into a list.
+            cfn = [cfn]
+        self.compose_config: List[str] = cfn
         self.branch: str = configuration.get("branch", "master")
         self.workdir = workdir
 
@@ -75,6 +77,22 @@ class App:
                 for key, value in configuration.get("replacements", {}).items()
             }
         )
+
+    @property
+    def compose_config_command(self) -> List[str]:
+        """
+        Return a tuple with the command for the filenames of all the Compose files.
+
+        The Compose command line accepts any number of YAML config files,
+        and this is a convenience method to return them in a format that's easy to
+        use with `subprocess.run`.
+        """
+        commands = []
+        for name in self.compose_config:
+            commands.append("-f")
+            commands.append(name)
+
+        return commands
 
     @property
     def dir(self):
@@ -128,8 +146,7 @@ class App:
             [
                 "/usr/bin/env",
                 "docker-compose",
-                "-f",
-                self.compose_filename,
+                *self.compose_config_command,
                 "ps",
                 "--services",
                 "--filter",
@@ -151,8 +168,7 @@ class App:
             [
                 "/usr/bin/env",
                 "docker-compose",
-                "-f",
-                self.compose_filename,
+                *self.compose_config_command,
                 "pull",
             ],
             self.dir,
@@ -168,8 +184,7 @@ class App:
             [
                 "/usr/bin/env",
                 "docker-compose",
-                "-f",
-                self.compose_filename,
+                *self.compose_config_command,
                 "up",
                 "--remove-orphans",
                 "--build",
@@ -194,8 +209,7 @@ class App:
                 [
                     "/usr/bin/env",
                     "docker-compose",
-                    "-f",
-                    self.compose_filename,
+                    *self.compose_config_command,
                     "down",
                     "--remove-orphans",
                 ],
@@ -371,25 +385,26 @@ class AppManager:
             raise Exception("Could not stop some containers.")
 
     def replace_config_vars(self, app: App):
-        with (app.dir / app.compose_filename).open("r+b") as cfile:
-            contents = cfile.read()
+        for cfn in app.compose_config:
+            with (app.dir / cfn).open("r+b") as cfile:
+                contents = cfile.read()
 
-            replacements = {
-                "DATA_DIR": str(app.workdir / DATA_DIR_NAME / app.id),
-                "CACHE_DIR": str(app.workdir / CACHES_DIR_NAME / app.id),
-                "REPO_DIR": str(app.workdir / REPOS_DIR_NAME / app.id),
-            }
-            replacements.update(app.replacements)
-            for varname, replacement in replacements.items():
-                contents = re.sub(
-                    (r"{{\s*HM_%s\s*}}" % varname).encode(),
-                    replacement.encode(),
-                    contents,
-                )
+                replacements = {
+                    "DATA_DIR": str(app.workdir / DATA_DIR_NAME / app.id),
+                    "CACHE_DIR": str(app.workdir / CACHES_DIR_NAME / app.id),
+                    "REPO_DIR": str(app.workdir / REPOS_DIR_NAME / app.id),
+                }
+                replacements.update(app.replacements)
+                for varname, replacement in replacements.items():
+                    contents = re.sub(
+                        (r"{{\s*HM_%s\s*}}" % varname).encode(),
+                        replacement.encode(),
+                        contents,
+                    )
 
-            cfile.truncate(0)
-            cfile.seek(0)
-            cfile.write(contents)
+                cfile.truncate(0)
+                cfile.seek(0)
+                cfile.write(contents)
 
 
 def process_config(apps: List[App], force_restart: bool = False) -> bool:

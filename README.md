@@ -50,8 +50,11 @@ apps:
     environment_file: "somefile.txt"
   otherapp:
     url: https://gitlab.com/otheruser/otherrepo.git
-    # The Compose config filename, if it's not docker-compose.yml.
-    compose_filename: mydocker-compose.yml
+    # The Compose config filename, if it's not docker-compose.yml, or if you
+    # want to use Harbormaster-specific overrides:
+    compose_config:
+      - docker-compose.yml
+      - docker-compose.harbormaster.yml
     # A dictionary of replacements (see below).
     replacements:
       MYVOLUMENAME: volume
@@ -168,7 +171,7 @@ Here's an example that includes the [Plex media server](https://www.plex.tv/):
 apps:
   plex:
     url: https://gitlab.com/stavros/harbormaster.git
-    compose_filename: apps/plex-bridge.yml
+    compose_config: apps/plex-bridge.yml
     environment:
       ADVERTISE_IP: "<the IP to advertise>"
       TZ: "<your timezone, e.g. Europe/Athens>"
