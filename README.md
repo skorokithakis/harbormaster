@@ -85,6 +85,15 @@ Harbormaster config directives won't take effect/cause app restarts until *the
 repos of the apps themselves* change.
 
 
+## Recommended secrets handling
+
+The recommended way for handling secrets is to add plaintext files to
+a `secrets/` subdirectory of the repository (e.g. `secrets/myservice.txt`) and use
+[git-crypt](https://github.com/AGWA/git-crypt) to encrypt them. That way, it's easy to
+add more secrets to the repository, but also only authorized people and the deployment
+server has access to the files.
+
+
 ## Handling data directories
 
 Due to the way Compose files work, you need to do some extra work to properly
