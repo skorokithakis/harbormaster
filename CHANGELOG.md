@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Fix Compose variables not getting rendered in some cases. [Stavros Korokithakis]
+
+
 ## v0.1.15 (2021-06-21)
 
 ### Features
