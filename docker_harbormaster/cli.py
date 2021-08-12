@@ -98,6 +98,33 @@ class App:
     def dir(self):
         return self.workdir / REPOS_DIR_NAME / self.id
 
+    def _render_config_vars(self):
+        """
+        Render Harbormaster variables in the Compose file.
+
+        This replaces variables like {{ HM_DATA_DIR }} with their value counterparts.
+        """
+        for cfn in self.compose_config:
+            with (self.dir / cfn).open("r+b") as cfile:
+                contents = cfile.read()
+
+                replacements = {
+                    "DATA_DIR": str(self.workdir / DATA_DIR_NAME / self.id),
+                    "CACHE_DIR": str(self.workdir / CACHES_DIR_NAME / self.id),
+                    "REPO_DIR": str(self.workdir / REPOS_DIR_NAME / self.id),
+                }
+                replacements.update(self.replacements)
+                for varname, replacement in replacements.items():
+                    contents = re.sub(
+                        (r"{{\s*HM_%s\s*}}" % varname).encode(),
+                        replacement.encode(),
+                        contents,
+                    )
+
+                cfile.truncate(0)
+                cfile.seek(0)
+                cfile.write(contents)
+
     def _read_var_file(self, filename: Optional[str], base_dir: Path) -> Dict[str, str]:
         """
         Read and parse an environment or replacements file.
@@ -309,10 +336,13 @@ class App:
             try:
                 if self.is_repo():
                     click.echo(f"Pulling {self.url} to {self.dir}...")
-                    return self.pull()
+                    updated = self.pull()
                 else:
                     click.echo(f"Cloning {self.url} to {self.dir}...")
-                    return self.clone()
+                    updated = self.clone()
+
+                self._render_config_vars()
+                return updated
             except Exception as e:
                 last_exception = e
                 if i < MAX_GIT_NETWORK_ATTEMPTS - 1:
@@ -384,32 +414,9 @@ class AppManager:
         if any(return_codes):
             raise Exception("Could not stop some containers.")
 
-    def replace_config_vars(self, app: App):
-        for cfn in app.compose_config:
-            with (app.dir / cfn).open("r+b") as cfile:
-                contents = cfile.read()
-
-                replacements = {
-                    "DATA_DIR": str(app.workdir / DATA_DIR_NAME / app.id),
-                    "CACHE_DIR": str(app.workdir / CACHES_DIR_NAME / app.id),
-                    "REPO_DIR": str(app.workdir / REPOS_DIR_NAME / app.id),
-                }
-                replacements.update(app.replacements)
-                for varname, replacement in replacements.items():
-                    contents = re.sub(
-                        (r"{{\s*HM_%s\s*}}" % varname).encode(),
-                        replacement.encode(),
-                        contents,
-                    )
-
-                cfile.truncate(0)
-                cfile.seek(0)
-                cfile.write(contents)
-
 
 def process_config(apps: List[App], force_restart: bool = False) -> bool:
     """Process a given configuration file."""
-    rm = AppManager()
     successes = []
     for app in apps:
         click.echo(f"Updating {app.id} ({app.branch})...")
@@ -428,7 +435,6 @@ def process_config(apps: List[App], force_restart: bool = False) -> bool:
 
             # The app is not running and it should be, so start it.
             if app.enabled and (stopped or not app.is_running()):
-                rm.replace_config_vars(app)
                 app.start()
                 click.echo(f"{app.id}: Starting...")
             else:
