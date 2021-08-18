@@ -9,6 +9,27 @@ Compose files and running the Compose apps they contain. It will also handle
 updating/restarting the apps when the repositories change.
 
 
+## Rationale
+
+Do you have a home server you want to run a few apps on, but don't want everything to
+break every time you upgrade the OS? Do you want automatic updates but don't want to buy
+an extra 4 servers so you can run Kubernetes?
+
+Do you have a work server that you want to run a few small services on, but don't want
+to have to manually manage it? Do you find that having every deployment action be in
+a git repo more tidy?
+
+Harbormaster is for you.
+
+At its core, Harbormaster takes a YAML config file with a list of git repository URLs
+containing Docker Compose files, clones/pulls them, and starts the services they
+describe.
+
+You run Harbormaster on a timer, pointing it to a directory, and it updates all the
+repositories in its configuration, and restarts the Compose services if they have
+changed. That's it!
+
+
 ## Installation
 
 Installing Harbormaster is simple. You can use `pipx` (recommended):
@@ -83,6 +104,47 @@ terminate your apps when necessary.
 Also, keep in mind that, due to current limitations, some changes to the
 Harbormaster config directives won't take effect/cause app restarts until *the
 repos of the apps themselves* change.
+
+
+## Recommended deployment
+
+The recommended way to run Harbormaster is on a timer. You can use systemd, with two
+files. Put the Harbormaster configuration YAML in a repository, and clone it somewhere.
+Then, use the two files to run Harbormaster in that repository.
+
+**/etc/systemd/system/harbormaster.service**:
+
+```toml
+[Unit]
+Description=Run the Harbormaster updater
+Wants=harbormaster.timer
+
+[Service]
+ExecStart=/usr/local/bin/harbormaster
+ExecStartPre=/usr/bin/git pull
+WorkingDirectory=<the Harbormaster working directory>
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**/etc/systemd/system/harbormaster.timer**:
+
+```toml
+[Unit]
+Description=Run Harbormaster every few minutes.
+Requires=harbormaster.service
+
+[Timer]
+Unit=harbormaster.service
+OnUnitInactiveSec=5m
+
+[Install]
+WantedBy=timers.target
+```
+
+This will run Harbormaster every five minutes, pulling your configuration repository
+before the run.
 
 
 ## Recommended secrets handling
