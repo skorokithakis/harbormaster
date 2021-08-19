@@ -29,6 +29,9 @@ You run Harbormaster on a timer, pointing it to a directory, and it updates all 
 repositories in its configuration, and restarts the Compose services if they have
 changed. That's it!
 
+It also cleanly stores data for all apps in a single `data/` directory, so you always
+have one directory that holds all the state, which you can easily back up and restore.
+
 
 ## Installation
 
