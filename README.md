@@ -68,6 +68,8 @@ apps:
     # config file (this file).
     # Variables in the `environment` key above take precedence over variables
     # in the file.
+    # Make sure all these variable names appear in the `environment` section of the
+    # app's `docker-compose.yml` file.
     environment_file: "somefile.txt"
   otherapp:
     url: https://gitlab.com/otheruser/otherrepo.git
