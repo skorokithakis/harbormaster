@@ -530,6 +530,10 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
         (workdir / directory).mkdir(exist_ok=True)
 
     configuration = yaml.load(open(config), Loader=Loader)
+    if not configuration or not configuration.get("apps"):
+        click.echo("No apps specified, nothing to do.")
+        sys.exit(0)
+
     apps = [
         App(
             id=repo_id,
