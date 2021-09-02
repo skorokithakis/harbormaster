@@ -127,7 +127,7 @@ Wants=harbormaster.timer
 [Service]
 ExecStart=/usr/local/bin/harbormaster
 ExecStartPre=/usr/bin/git pull
-WorkingDirectory=<the Harbormaster working directory>
+WorkingDirectory=<the repository directory>
 
 [Install]
 WantedBy=multi-user.target
@@ -146,6 +146,19 @@ OnUnitInactiveSec=5m
 
 [Install]
 WantedBy=timers.target
+```
+
+Then, run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable harbormaster
+
+# To run Harbormaster immediately:
+sudo service harbormaster start
+
+# To check the Harbormaster run logs:
+sudo journalctl -fu harbormaster
 ```
 
 This will run Harbormaster every five minutes, pulling your configuration repository
