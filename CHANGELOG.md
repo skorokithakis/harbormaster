@@ -5,6 +5,8 @@
 
 ### Fixes
 
+* Streamline repository updates and improve change detection (fixes #3) [Stavros Korokithakis]
+
 * Do not pull disabled apps. [Stavros Korokithakis]
 
 * Fail gracefully if no configuration is specified. [Stavros Korokithakis]
