@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Fail gracefully if no configuration is specified. [Stavros Korokithakis]
+
+
 ## v0.1.16 (2021-08-12)
 
 ### Fixes

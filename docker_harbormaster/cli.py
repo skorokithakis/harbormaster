@@ -421,9 +421,13 @@ def process_config(apps: List[App], force_restart: bool = False) -> bool:
     for app in apps:
         click.echo(f"Updating {app.id} ({app.branch})...")
         try:
-            updated_repo = app.clone_or_pull()
-            if updated_repo:
-                click.echo(f"{app.id}: Repo was updated.")
+            if app.enabled:
+                updated_repo = app.clone_or_pull()
+                if updated_repo:
+                    click.echo(f"{app.id}: Repo was updated.")
+            else:
+                debug(f"{app.id} is disabled, will not pull.")
+                updated_repo = False
 
             # The app needs to be restarted, or is not enabled, so stop it.
             if updated_repo or force_restart or not app.enabled:
