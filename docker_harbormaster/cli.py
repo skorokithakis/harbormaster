@@ -267,32 +267,37 @@ class App:
         """
         Pull a repository.
 
-        Returns whether an update was done.
+        Return a boolean indicating whether an update was done.
         """
-        if not self.check_for_upstream_changes():
+        # Note the old revision for change detection.
+        old_rev = self.get_current_hash()
+        self.pull_upstream()
+        new_rev = self.get_current_hash()
+
+        debug(f"Old rev is {old_rev}, new rev is {new_rev}.")
+        if old_rev == new_rev:
+            debug("No update required.")
             # No update necessary.
             return False
 
-        if run_command(["/usr/bin/env", "git", "reset", "--hard"], self.dir) != 0:
-            raise Exception("Could not reset local repository.")
-
-        if (
-            run_command(
-                ["/usr/bin/env", "git", "reset", "--hard", f"origin/{self.branch}"],
-                self.dir,
-            )
-            != 0
-        ):
-            raise Exception("Could not reset local repository to the origin.")
-
-        if run_command(["/usr/bin/env", "git", "merge", "FETCH_HEAD"], self.dir) != 0:
-            raise Exception("Could not check out given branch.")
-
         return True
 
-    def check_for_upstream_changes(self) -> bool:
+    def get_current_hash(self) -> str:
+        """Return the git repository's current commit SHA."""
+        return (
+            run_command_full(["/usr/bin/env", "git", "rev-parse", "HEAD"], self.dir)[1]
+            .decode()
+            .strip()
+        )
+
+    def pull_upstream(self) -> None:
         """
-        Check upstream for changes and return True if there are some.
+        Pull the upstream changes, making sure they're applied locally.
+
+        This method will do whatever is necessary to make sure that the upstream changes
+        are applied locally. Basically, the idea is that, at the end of this method, the
+        local repository looks exactly like the remote and branch that was specified, no
+        matter what.
         """
         if (
             run_command(
@@ -312,23 +317,14 @@ class App:
         ):
             raise Exception("Could not fetch from origin.")
 
-        a = (
-            run_command_full(
-                ["/usr/bin/env", "git", "rev-parse", self.branch], self.dir
-            )[1]
-            .decode()
-            .strip()
-        )
-        b = (
-            run_command_full(
-                ["/usr/bin/env", "git", "rev-parse", f"origin/{self.branch}"], self.dir
-            )[1]
-            .decode()
-            .strip()
-        )
-
-        # If the two revs are the same, we're up to date.
-        return a != b
+        if (
+            run_command(
+                ["/usr/bin/env", "git", "reset", "--hard", f"origin/{self.branch}"],
+                self.dir,
+            )
+            != 0
+        ):
+            raise Exception("Could not reset local repository to the origin.")
 
     def clone_or_pull(self) -> bool:
         """Pull a repository, or clone it if it hasn't been initialized yet."""
@@ -419,6 +415,7 @@ def process_config(apps: List[App], force_restart: bool = False) -> bool:
     """Process a given configuration file."""
     successes = []
     for app in apps:
+        debug("-" * 100)
         click.echo(f"Updating {app.id} ({app.branch})...")
         try:
             if app.enabled:

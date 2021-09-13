@@ -5,6 +5,8 @@
 
 ### Fixes
 
+* Do not pull disabled apps. [Stavros Korokithakis]
+
 * Fail gracefully if no configuration is specified. [Stavros Korokithakis]
 
 
