@@ -110,6 +110,10 @@ Also, keep in mind that, due to current limitations, some changes to the
 Harbormaster config directives won't take effect/cause app restarts until *the
 repos of the apps themselves* change.
 
+If you want to trigger Harbormaster via a webhook (perhaps whenever the config file
+repository changes), you can use [Captain
+Webhook](https://captain-webhook.readthedocs.io/).
+
 
 ## Recommended deployment
 
