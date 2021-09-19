@@ -34,8 +34,7 @@ pypi:
     when: on_success
   script:
       - pip install -U twine gitchangelog pystache poetry
-      - gitchangelog
       - echo "" >> README.md
-      - cat CHANGELOG.md >> README.md
+      - gitchangelog >> README.md
       - poetry build
       - twine upload dist/*
