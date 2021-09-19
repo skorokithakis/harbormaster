@@ -35,5 +35,7 @@ pypi:
   script:
       - pip install -U twine gitchangelog pystache poetry
       - gitchangelog
+      - echo "" >> README.md
+      - cat CHANGELOG.md >> README.md
       - poetry build
       - twine upload dist/*
