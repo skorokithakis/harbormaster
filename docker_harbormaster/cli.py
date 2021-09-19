@@ -269,6 +269,10 @@ class App:
 
         Return a boolean indicating whether an update was done.
         """
+        if not self.enabled:
+            debug("App isn't enabled, will not pull.")
+            return False
+
         # Note the old revision for change detection.
         old_rev = self.get_current_hash()
         self.pull_upstream()
