@@ -327,7 +327,8 @@ convenience. Check out the [apps](apps) directory for the Compose files. You
 can include them in your Harbormaster config directly, with no other
 configuration.
 
-Here's an example that includes the [Plex media server](https://www.plex.tv/):
+Here's an example that includes the [Plex media server](https://www.plex.tv/) and
+[ZTNCUI](https://github.com/key-networks/ztncui):
 
 ```yaml
 apps:
@@ -341,4 +342,10 @@ apps:
     replacements:
       HOSTNAME: "<your hostname>"
       MEDIA_DIR: "<your video directory on the host>"
+
+  ztncui:
+    url: https://gitlab.com/stavros/harbormaster.git
+    environment:
+      ZTNCUI_PASSWD: "<some password>"
+    compose_config: apps/ztncui/docker-compose.harbormaster.yml
 ```

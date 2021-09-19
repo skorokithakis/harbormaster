@@ -1,6 +1,17 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add ztncui app. [Stavros Korokithakis]
+
+### Fixes
+
+* Don't pull disabled apps, no good can come of it. [Stavros Korokithakis]
+
+
 ## v0.1.17 (2021-09-13)
 
 ### Fixes
