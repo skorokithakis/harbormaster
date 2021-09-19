@@ -1,0 +1,18 @@
+services:
+  ztncui:
+    image: keynetworks/ztncui
+    restart: unless-stopped
+    ports:
+      - 3443:3443/tcp
+    environment:
+      - NODE_ENV=production
+      - HTTPS_PORT=3443
+      - HTTP_PORT=3000
+      - MYDOMAIN=ztncui.docker.test
+      - HTTPS_HOST
+      - ZTNCUI_PASSWD
+      - HTTP_ALL_INTERFACES
+      - MYADDR
+    volumes:
+      - {{ HM_DATA_DIR }}/ztncui:/opt/key-networks/ztncui/etc/
+      - {{ HM_DATA_DIR }}/zt1:/var/lib/zerotier-one/
