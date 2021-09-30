@@ -33,6 +33,16 @@ It also cleanly stores data for all apps in a single `data/` directory, so you a
 have one directory that holds all the state, which you can easily back up and restore.
 
 
+## High-level architecture overview
+
+At its core, Harbormaster works very simply: It takes a YAML file containing a list of
+repositories, pulls/clones them as necessary, messes with their `docker-compose.yml`
+files in the way you specify, and tells Compose to start, stop, or restart them, as
+needed.
+
+That's all it does.
+
+
 ## Installation
 
 Installing Harbormaster is simple. You can use `pipx` (recommended):
