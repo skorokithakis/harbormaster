@@ -98,6 +98,11 @@ class App:
     def dir(self):
         return self.workdir / REPOS_DIR_NAME / self.id
 
+    @property
+    def repo_dir_exists(self) -> bool:
+        """Return whether a repository directory exists for this app."""
+        return self.dir.exists()
+
     def _render_config_vars(self):
         """
         Render Harbormaster variables in the Compose file.
@@ -431,7 +436,9 @@ def process_config(apps: List[App], force_restart: bool = False) -> bool:
                 updated_repo = False
 
             # The app needs to be restarted, or is not enabled, so stop it.
-            if updated_repo or force_restart or not app.enabled:
+            if app.repo_dir_exists and (
+                updated_repo or force_restart or not app.enabled
+            ):
                 click.echo(f"{app.id}: Stopping...")
                 app.stop()
                 stopped: Optional[bool] = True

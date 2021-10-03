@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Fix changelog display. [Stavros Korokithakis]
+
+
 ## v0.1.18 (2021-09-19)
 
 ### Features
