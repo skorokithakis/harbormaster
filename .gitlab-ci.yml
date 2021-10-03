@@ -1,6 +1,7 @@
 image: python:3.8
 
 stages:
+  - test
   - build
   - release
 
@@ -14,7 +15,7 @@ test:
       - .cache/pre-commit
       - .cache/pip
       - venv
-  stage: build
+  stage: test
   before_script:
     - pip install virtualenv poetry pre-commit
     - virtualenv venv
@@ -23,6 +24,26 @@ test:
     - poetry install --no-root
   script:
     - pre-commit run -a --hook-stage manual
+
+build linux:
+  stage: build
+  variables:
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.pyenv/shims/"
+  image:
+    name: cdrx/pyinstaller-linux
+    entrypoint: [""]
+  script:
+    - pwd
+    - mv * /src/
+    - cd /src
+    - pip3 install poetry
+    - poetry config virtualenvs.create false
+    - poetry export --without-hashes -o requirements.txt
+    - /entrypoint.sh
+    - mv "dist/linux/harbormaster" /builds/stavros/harbormaster/
+  artifacts:
+    paths:
+      - harbormaster
 
 pypi:
   variables:

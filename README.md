@@ -59,6 +59,9 @@ $ pip install docker-harbormaster
 
 You need to also make sure you have `git` installed on your system.
 
+You can also download a standalone executable for Linux from the [pipelines
+page](https://gitlab.com/stavros/harbormaster/-/pipelines).
+
 
 ## Usage
 

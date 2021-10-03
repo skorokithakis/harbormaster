@@ -3,7 +3,13 @@
 
 ## Unreleased
 
+### Features
+
+* Add executable building. [Stavros Korokithakis]
+
 ### Fixes
+
+* Don't try to stop an app if its repo dir doesn't exist. [Stavros Korokithakis]
 
 * Fix changelog display. [Stavros Korokithakis]
 
