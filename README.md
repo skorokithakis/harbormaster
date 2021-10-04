@@ -267,6 +267,21 @@ Also, note that replacements will be written on disk, in the Compose config
 file. If, for some reason, you want to avoid that (e.g. if you have secrets you
 don't want exposed), try to use environment variables instead.
 
+One experimental feature of replacements is the ability to specify defaults:
+
+```yaml
+services:
+  app:
+    environment:
+      HTTP_PORT:{{ HM_PORT:80 }}
+      STACK:{{ HM_STACK:"production" }}
+```
+
+If you don't specify the `PORT` variable in the Harbormaster config file, the
+replacement will be replaced with `80`.
+
+This feature is still experimental and may change.
+
 
 ## Examples
 

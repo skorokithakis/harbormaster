@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ast
 import os
 import re
 import shutil
@@ -37,6 +38,32 @@ def debug(message: Any) -> None:
     """Print a message if DEBUG is True."""
     if DEBUG:
         click.echo(message)
+
+
+def render_template(template: str, replacements: Dict[str, Any]) -> str:
+    """Render a template with the values in replacements."""
+    # Perform all defined replacements.
+    for varname, replacement in replacements.items():
+        template = re.sub(
+            r"{{\s*HM_%s(?:\:(.*?))?\s*}}" % varname,
+            str(replacement),
+            template,
+        )
+
+    def replacement_fn(match: re.Match) -> str:
+        try:
+            value = str(ast.literal_eval(match.group(1)))
+        except Exception:
+            value = "HM_INVALID_DEFAULT_VALUE"
+        return value
+
+    # Replace all undefined replacements with their defaults.
+    template = re.sub(
+        r"{{\s*HM_(?:.*?)\:(.*?)\s*}}",
+        replacement_fn,
+        template,
+    )
+    return template
 
 
 class App:
@@ -110,7 +137,7 @@ class App:
         This replaces variables like {{ HM_DATA_DIR }} with their value counterparts.
         """
         for cfn in self.compose_config:
-            with (self.dir / cfn).open("r+b") as cfile:
+            with (self.dir / cfn).open("r+") as cfile:
                 contents = cfile.read()
 
                 replacements = {
@@ -119,12 +146,7 @@ class App:
                     "REPO_DIR": str(self.workdir / REPOS_DIR_NAME / self.id),
                 }
                 replacements.update(self.replacements)
-                for varname, replacement in replacements.items():
-                    contents = re.sub(
-                        (r"{{\s*HM_%s\s*}}" % varname).encode(),
-                        replacement.encode(),
-                        contents,
-                    )
+                contents = render_template(contents, replacements)
 
                 cfile.truncate(0)
                 cfile.seek(0)
