@@ -1,0 +1,20 @@
+services:
+  octoprint:
+    image: octoprint/octoprint:1.6
+    restart: unless-stopped
+    ports:
+      - 2280:80
+    devices:
+      - /dev/video0
+      - /dev/bus/usb
+    volumes:
+      - {{ HM_DATA_DIR }}/octoprint:/octoprint
+      - /run/udev:/run/udev:ro  # so that serial number vendor/product ids are known
+      - /dev:/dev
+    environment:
+      - ENABLE_MJPG_STREAMER=true
+      - MJPG_STREAMER_INPUT=-n -r 640x480 -f 10 -y
+    # From https://github.com/marthoc/docker-deconz/issues/298#issuecomment-732293745.
+    device_cgroup_rules:
+      - 'c 166:* rmw' # allow creation of /dev/ttyACMx nodes via mknod
+      - 'c 188:* rmw' # allow creation of /dev/ttyUSBx nodes via mknod
