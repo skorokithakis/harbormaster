@@ -5,6 +5,8 @@
 
 ### Features
 
+* Add default values to templates. [Stavros Korokithakis]
+
 * Add Octoprint app config. [Stavros Korokithakis]
 
 * Add executable building. [Stavros Korokithakis]

@@ -273,8 +273,8 @@ One experimental feature of replacements is the ability to specify defaults:
 services:
   app:
     environment:
-      HTTP_PORT:{{ HM_PORT:80 }}
-      STACK:{{ HM_STACK:"production" }}
+      HTTP_PORT: {{ HM_PORT:80 }}
+      STACK: {{ HM_STACK:"production" }}
 ```
 
 If you don't specify the `PORT` variable in the Harbormaster config file, the
