@@ -5,7 +5,6 @@ services:
     ports:
       - 2280:80
     devices:
-      - /dev/video0
       - /dev/bus/usb
     volumes:
       - {{ HM_DATA_DIR }}/octoprint:/octoprint
