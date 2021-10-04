@@ -361,4 +361,8 @@ apps:
     environment:
       ZTNCUI_PASSWD: "<some password>"
     compose_config: apps/ztncui/docker-compose.harbormaster.yml
+
+  octoprint:
+    url: https://gitlab.com/stavros/harbormaster.git
+    compose_config: apps/octoprint/docker-compose.harbormaster.yml
 ```

@@ -5,6 +5,8 @@
 
 ### Features
 
+* Add Octoprint app config. [Stavros Korokithakis]
+
 * Add executable building. [Stavros Korokithakis]
 
 ### Fixes
