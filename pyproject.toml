@@ -19,8 +19,8 @@ docker-compose = "^1.29.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
-gitchangelog = "^3.0.4"
-pystache = "^0.5.4"
+gitchangelog = {url = "https://github.com/sarnold/gitchangelog/archive/refs/heads/master.zip"}
+pystache = {url = "https://github.com/sarnold/pystache/archive/refs/heads/master.zip"}
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
