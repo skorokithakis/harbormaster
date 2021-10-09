@@ -55,4 +55,4 @@ pypi:
       - echo "" >> README.md
       - gitchangelog >> README.md
       - poetry build
-      - if [[ -z "$TWINE_USERNAME" && -z $(echo "$CI_COMMIT_TAG" | grep -P "^v\d+\.\d+\.\d+") ]]; then twine check; else twine upload dist/*; fi
+      - if [[ -z "$TWINE_USERNAME" || -z $(echo "$CI_COMMIT_TAG" | grep -P "^v\d+\.\d+\.\d+") ]]; then twine check; else twine upload dist/*; fi
