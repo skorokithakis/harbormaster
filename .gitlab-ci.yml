@@ -50,12 +50,10 @@ pypi:
     TWINE_USERNAME: "__token__"
   stage: release
   needs: [test]
-  rules:
-  - if: $CI_COMMIT_TAG =~ /^v\d+.\d+.\d+$/
-    when: on_success
   script:
       - pip install -U twine gitchangelog pystache poetry
       - echo "" >> README.md
       - gitchangelog >> README.md
       - poetry build
       - twine upload dist/*
+      - if [ -z "$TWINE_USERNAME" ]; then twine check; else twine upload dist/*; fi
