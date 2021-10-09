@@ -45,3 +45,10 @@ repos:
     name: Generate changelog
     entry: bash -c "gitchangelog > CHANGELOG.md"
     stages: [commit]
+- repo: local
+  hooks:
+    - id: forbid_prints
+      name: Check for leftover print statements.
+      types: [python]
+      entry: "print\\s*\\("
+      language: pygrep

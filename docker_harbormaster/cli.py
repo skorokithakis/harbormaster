@@ -17,11 +17,6 @@ from typing import Tuple
 import click
 import yaml
 
-try:
-    from yaml import CLoader as Loader
-except ImportError:
-    from yaml import Loader  # type: ignore
-
 
 DEBUG: bool = False
 
@@ -40,7 +35,7 @@ def debug(message: Any) -> None:
         click.echo(message)
 
 
-def render_template(template: str, replacements: Dict[str, Any]) -> str:
+def _render_template(template: str, replacements: Dict[str, Any]) -> str:
     """Render a template with the values in replacements."""
     # Perform all defined replacements.
     for varname, replacement in replacements.items():
@@ -66,6 +61,59 @@ def render_template(template: str, replacements: Dict[str, Any]) -> str:
     return template
 
 
+def _read_var_file(
+    filename: Optional[str],
+    base_dir: Path,
+    app_id: str,
+) -> Dict[str, str]:
+    """
+    Read and parse an environment or replacements file.
+
+    The file will be parsed as YAML if the filename ends in .yml or .yaml, otherwise
+    it will be parsed as a plain key=value file.
+
+    Abruptly terminates the program with an error message if the file could
+    not be read.
+    """
+    if not filename:
+        return {}
+
+    f = (base_dir / Path(filename)).resolve()
+    if not f.is_file():
+        sys.exit(
+            f'Environment or replacements file for app "{app_id}" '
+            f"cannot be read, cannot continue:\n{f}"
+        )
+    output = {}
+    contents = f.read_text()
+
+    if f.suffix.lower() in (".yml", ".yaml"):
+        # This file is YAML.
+        try:
+            output = yaml.safe_load(contents)
+            assert type(output) == dict
+            assert all(type(x) is str for x in output.keys())
+            assert all(type(x) is str for x in output.values())
+            # Convert everything to a string.
+        except Exception:
+            raise ValueError(
+                f"{filename} is not valid YAML or does not contain "
+                "a single YAML collection of strings."
+            )
+    else:
+        for line in contents.split("\n"):
+            if not line:
+                continue
+            if "=" not in line:
+                sys.exit(
+                    f"Environment or replacements file for app {app_id} contained a "
+                    f"line without an equals sign (=), cannot continue:\n{f}"
+                )
+            key, value = line.split("=", maxsplit=1)
+            output[key] = value
+    return output
+
+
 class App:
     def __init__(
         self,
@@ -85,8 +133,10 @@ class App:
         self.branch: str = configuration.get("branch", "master")
         self.workdir = workdir
 
-        self.environment: Dict[str, str] = self._read_var_file(
-            configuration.get("environment_file"), config_filename.parent
+        self.environment: Dict[str, str] = _read_var_file(
+            filename=configuration.get("environment_file"),
+            base_dir=config_filename.parent,
+            app_id=self.id,
         )
         self.environment.update(
             {
@@ -95,8 +145,10 @@ class App:
             }
         )
 
-        self.replacements: Dict[str, str] = self._read_var_file(
-            configuration.get("replacements_file", {}), config_filename.parent
+        self.replacements: Dict[str, str] = _read_var_file(
+            filename=configuration.get("replacements_file", {}),
+            base_dir=config_filename.parent,
+            app_id=self.id,
         )
         self.replacements.update(
             {
@@ -146,41 +198,11 @@ class App:
                     "REPO_DIR": str(self.workdir / REPOS_DIR_NAME / self.id),
                 }
                 replacements.update(self.replacements)
-                contents = render_template(contents, replacements)
+                contents = _render_template(contents, replacements)
 
                 cfile.truncate(0)
                 cfile.seek(0)
                 cfile.write(contents)
-
-    def _read_var_file(self, filename: Optional[str], base_dir: Path) -> Dict[str, str]:
-        """
-        Read and parse an environment or replacements file.
-
-        Abruptly terminates the program with an error message if the file could
-        not be read.
-        """
-        if not filename:
-            return {}
-
-        f = (base_dir / Path(filename)).resolve()
-        if not f.is_file():
-            sys.exit(
-                f'Environment or replacements file for app "{self.id}" '
-                f"cannot be read, cannot continue:\n{f}"
-            )
-        output = {}
-        contents = f.read_text()
-        for line in contents.split("\n"):
-            if not line:
-                continue
-            if "=" not in line:
-                sys.exit(
-                    f"Environment or replacements file for app {self.id} contained a "
-                    f"line without an equals sign (=), cannot continue:\n{f}"
-                )
-            key, value = line.split("=", maxsplit=1)
-            output[key] = value
-        return output
 
     def is_repo(self) -> bool:
         """Check whether a repository exists and is actually a repository."""
@@ -563,7 +585,7 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
         # Create the necessary directories.
         (workdir / directory).mkdir(exist_ok=True)
 
-    configuration = yaml.load(open(config), Loader=Loader)
+    configuration = yaml.safe_load(open(config))
     if not configuration or not configuration.get("apps"):
         click.echo("No apps specified, nothing to do.")
         sys.exit(0)

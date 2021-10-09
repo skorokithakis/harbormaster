@@ -81,7 +81,8 @@ apps:
       MYVAR: 1
     # A file to load environment variables from. The file must consist of lines
     # in the form of key=value. The filename is relative to the Harbormaster
-    # config file (this file).
+    # config file (this file). This can also be a YAML file with the .yml extension,
+    # containing a single YAML collection of string values.
     # Variables in the `environment` key above take precedence over variables
     # in the file.
     # Make sure all these variable names appear in the `environment` section of the
@@ -100,6 +101,8 @@ apps:
     # A file containing replacements. Works in the exact same way as the
     # `environment_file` above.
     replacements_file: "otherfile.txt"
+    # A YAML environment file.
+    environment_file: "somefile.yml"
   oldapp:
     # This is an old app, so it shouldn't be run.
     enabled: false
