@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:11
+    restart: unless-stopped
+    volumes:
+      - {{ HM_DATA_DIR }}/pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U postgres"]
+      timeout: 30s
+      interval: 5s
+
+  n8n:
+    image: n8nio/n8n:{{ HM_CONTAINER_VERSION:"latest" }}
+    restart: unless-stopped
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=postgres
+      - DB_POSTGRESDB_USER=postgres
+      - DB_POSTGRESDB_PASSWORD=postgres
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_BASIC_AUTH_USER
+      - N8N_BASIC_AUTH_PASSWORD
+    ports:
+      - {{ HM_PORT:"127.0.0.1:5678" }}:5678
+    volumes:
+      - {{ HM_DATA_DIR }}/n8n:/home/node/.n8n
+    command: /bin/sh -c "n8n start"
+    depends_on:
+      postgres:
+        condition: service_healthy
