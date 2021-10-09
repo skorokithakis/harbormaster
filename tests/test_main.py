@@ -6,6 +6,7 @@ def test_template():
     templates = [
         ("""{{ HM_FOO }}, {{ HM_BAR }}, {{ HM_BAZ:80 }}""", "3, 4, 80"),
         ("""{{ HM_FOO }} {{ HM_BAZ }}""", "3 {{ HM_BAZ }}"),
+        ("""{{ HM_FOO }} {{ HM_FOO }} {{ HM_FOO }}""", "3 3 3"),
         ("""{{ HM_FOO }} {{ BAR }}""", "3 {{ BAR }}"),
         ("""{{ HM_BAR }}, {{ HM_BAZ:a } }}""", "4, HM_INVALID_DEFAULT_VALUE"),
         ("""{{ HM_BAR }}, {{ HM_BAZ:"hello" }}""", "4, hello"),

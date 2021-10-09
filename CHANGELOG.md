@@ -5,6 +5,8 @@
 
 ### Features
 
+* Add n8n app. [Stavros Korokithakis]
+
 * Add default values to templates. [Stavros Korokithakis]
 
 * Add Octoprint app config. [Stavros Korokithakis]
