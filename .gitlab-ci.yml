@@ -40,7 +40,7 @@ build linux:
     - poetry config virtualenvs.create false
     - poetry export --without-hashes -o requirements.txt
     - /entrypoint.sh
-    - mv "dist/linux/harbormaster" /builds/stavros/harbormaster/
+    - mv "dist/linux/harbormaster" "${CI_PROJECT_DIR}"
   artifacts:
     paths:
       - harbormaster
