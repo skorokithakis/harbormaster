@@ -45,11 +45,3 @@ repos:
     name: Generate changelog
     entry: bash -c "gitchangelog > CHANGELOG.md"
     stages: [commit]
-- repo: local
-  hooks:
-  - id: pytest-check
-    name: Run pytest
-    entry: pytest
-    language: system
-    pass_filenames: false
-    always_run: true
