@@ -5,8 +5,6 @@
 
 ### Features
 
-* Add YAML environment files. [Stavros Korokithakis]
-
 * Allow Docker-supported installations. [Stavros Korokithakis]
 
 
