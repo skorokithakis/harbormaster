@@ -7,6 +7,15 @@
 
 * Add YAML environment files. [Stavros Korokithakis]
 
+* Allow Docker-supported installations. [Stavros Korokithakis]
+
+
+## v0.1.19 (2021-10-09)
+
+### Features
+
+* Add YAML environment files. [Stavros Korokithakis]
+
 * Add n8n app. [Stavros Korokithakis]
 
 * Add default values to templates. [Stavros Korokithakis]

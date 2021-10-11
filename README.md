@@ -33,17 +33,10 @@ It also cleanly stores data for all apps in a single `data/` directory, so you a
 have one directory that holds all the state, which you can easily back up and restore.
 
 
-## High-level architecture overview
-
-At its core, Harbormaster works very simply: It takes a YAML file containing a list of
-repositories, pulls/clones them as necessary, messes with their `docker-compose.yml`
-files in the way you specify, and tells Compose to start, stop, or restart them, as
-needed.
-
-That's all it does.
-
-
 ## Installation
+
+You can run Harbormaster directly from Docker, without installing anything. Skip down to
+the [Docker installation](#docker-installation) section.
 
 Installing Harbormaster is simple. You can use `pipx` (recommended):
 
@@ -61,6 +54,42 @@ You need to also make sure you have `git` installed on your system.
 
 You can also download a standalone executable for Linux from the [pipelines
 page](https://gitlab.com/stavros/harbormaster/-/pipelines).
+
+
+## Docker installation
+
+You can run Harbormaster by using just Docker. You need to follow a few simple steps to set
+up your configuration and SSH:
+
+* Your `harbormaster.yml` configuration file should be in a git repository. Check that
+  repository out into some directory, that we're going to call your "config" directory.
+* If you need an SSH key to pull the Harbormaster configuration file and the various
+  repositories, copy the private key into your config directory, to a file called
+  `ssh_private_key` (make sure it's not protected with a passphrase).
+* Make a directory for Harbormaster to work in somewhere. All your apps' data is going
+  to reside in that directory.
+* Run the Harbormaster image:
+```bash
+docker run -d \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v <the path to your Harbormaster working directory>:/main \
+    -v <the path to your config directory>:/config \
+    --restart unless-stopped \
+    stavros/harbormaster
+```
+
+Harbormaster will now run every five minutes, pull your config repository (from whatever
+remote it has), and run the apps in the config.
+
+
+## High-level architecture overview
+
+At its core, Harbormaster works very simply: It takes a YAML file containing a list of
+repositories, pulls/clones them as necessary, messes with their `docker-compose.yml`
+files in the way you specify, and tells Compose to start, stop, or restart them, as
+needed.
+
+That's all it does.
 
 
 ## Usage
