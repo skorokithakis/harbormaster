@@ -5,6 +5,8 @@
 
 ### Features
 
+* Add image pruning config option. [Stavros Korokithakis]
+
 * Allow Docker-supported installations. [Stavros Korokithakis]
 
 

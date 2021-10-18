@@ -137,6 +137,10 @@ apps:
     enabled: false
     # Two apps can use the same repo.
     url: https://gitlab.com/otheruser/otherrepo.git
+config:
+  # Prune *all unused* system images after a run. Good for saving space on the host.
+  # Careful, if you run this on a system with other Docker images, it will delete them.
+  prune: true
 ```
 
 Then, just run Harbormaster in the same directory as that configuration file.
@@ -358,7 +362,7 @@ services:
 The Harbormaster config file is very straightforward, it specifies a repo URL
 and the two Compose configuration files. The `docker-compose.yml` is specified
 first, and the Harbormaster override is second, so the command is overridden
-properly. There's also a configuration section, detailed below.
+properly.
 
 `harbormaster.yml`:
 
@@ -369,8 +373,6 @@ apps:
     compose_config:
       - docker-compose.yml
       - docker-compose.harbormaster.yml
-config:
-  prune: true
 ```
 
 This is a good way to add Harbormaster configuration files with very few lines
@@ -380,17 +382,6 @@ twice.
 
 It's better to define a different volume and change your command to use that
 directory, as we've done above.
-
-
-## Configuration
-
-Currently, Harbormaster supports the following configuration options, specified
-in a `config` section next to `apps`:
-
-* **prune**: If set to `true`, this will automatically prune **all** unused
-  Docker images after each run. Useful for saving space on the host by deleting
-  old images after a deploy. Be careful, though, if you run this on a system
-  where you have other Docker images, all of them will be deleted.
 
 
 ## Bundled apps
