@@ -358,7 +358,7 @@ services:
 The Harbormaster config file is very straightforward, it specifies a repo URL
 and the two Compose configuration files. The `docker-compose.yml` is specified
 first, and the Harbormaster override is second, so the command is overridden
-properly.
+properly. There's also a configuration section, detailed below.
 
 `harbormaster.yml`:
 
@@ -369,6 +369,8 @@ apps:
     compose_config:
       - docker-compose.yml
       - docker-compose.harbormaster.yml
+config:
+  prune: true
 ```
 
 This is a good way to add Harbormaster configuration files with very few lines
@@ -378,6 +380,17 @@ twice.
 
 It's better to define a different volume and change your command to use that
 directory, as we've done above.
+
+
+## Configuration
+
+Currently, Harbormaster supports the following configuration options, specified
+in a `config` section next to `apps`:
+
+* **prune**: If set to `true`, this will automatically prune **all** unused
+  Docker images after each run. Useful for saving space on the host by deleting
+  old images after a deploy. Be careful, though, if you run this on a system
+  where you have other Docker images, all of them will be deleted.
 
 
 ## Bundled apps

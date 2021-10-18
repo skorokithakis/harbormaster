@@ -16,12 +16,13 @@ python = "^3.6"
 PyYAML = "^5.4.1"
 click = "^7.1.2"
 docker-compose = "^1.29.1"
-GitPython = "^3.1.18"
+attrs = "^21.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
 gitchangelog = {url = "https://github.com/sarnold/gitchangelog/archive/refs/heads/master.zip"}
 pystache = {url = "https://github.com/sarnold/pystache/archive/refs/heads/master.zip"}
+GitPython = "^3.1.18"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

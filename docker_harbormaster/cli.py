@@ -14,6 +14,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+import attr
 import click
 import yaml
 
@@ -114,6 +115,67 @@ def _read_var_file(
     return output
 
 
+def _kill_orphan_containers(repo_id: str):
+    """
+    Kill all Docker containers for an app.
+
+    Instead of issuing a `docker-compose down`, this method looks for all
+    running containers that start with "{repo_id}_" (that's why it accepts
+    a string instead of an App instance).
+
+    That's because the configuration file might be missing, and we might
+    not know what the compose file's name is.
+    """
+    stdout = _run_command_full(
+        ["/usr/bin/env", "docker", "ps", "-qf", f"name={repo_id}_"],
+        Path("."),
+    )[1]
+    if not stdout:
+        # `docker ps` returned nothing, ie nothing is running.
+        return
+
+    container_ids = stdout.decode().strip().split("\n")
+    return_codes = []
+    for container_id in container_ids:
+        debug(f"Stopping container {container_id}...")
+        return_codes.append(
+            _run_command(["/usr/bin/env", "docker", "stop", container_id], Path("."))
+        )
+
+    if any(return_codes):
+        raise Exception("Could not stop some containers.")
+
+
+def _run_command_full(
+    command: List[str], chdir: Path, environment: Dict[str, str] = None
+) -> Tuple[int, bytes, bytes]:
+    """Run a command and return its exit code, stdout, and stderr."""
+    # Include the environment in our command.
+    env = os.environ.copy()
+    if environment:
+        env.update(environment)
+
+    wd = os.getcwd()
+    os.chdir(chdir)
+    debug("Command: " + " ".join([str(x) for x in command]))
+    process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+    )
+    stdout, stderr = process.communicate()
+    debug(f"Return code: {process.returncode}")
+    debug(stdout)
+    debug(stderr)
+    os.chdir(wd)
+    return (process.returncode, stdout, stderr)
+
+
+def _run_command(
+    command: List[str], chdir: Path, environment: Dict[str, str] = None
+) -> int:
+    """Run a command and return its exit code."""
+    return _run_command_full(command, chdir, environment=environment)[0]
+
+
 class App:
     def __init__(
         self,
@@ -210,7 +272,7 @@ class App:
             return False
 
         return (
-            run_command(
+            _run_command(
                 ["/usr/bin/env", "git", "rev-parse", "--show-toplevel"], self.dir
             )
             == 0
@@ -218,7 +280,7 @@ class App:
 
     def is_running(self) -> bool:
         """Check if the app is running."""
-        stdout = run_command_full(
+        stdout = _run_command_full(
             [
                 "/usr/bin/env",
                 "docker-compose",
@@ -240,7 +302,7 @@ class App:
 
     def start(self):
         """Start the Docker containers for this app."""
-        status, stdout, stderr = run_command_full(
+        status, stdout, stderr = _run_command_full(
             [
                 "/usr/bin/env",
                 "docker-compose",
@@ -256,7 +318,7 @@ class App:
                 f"Could not pull the docker-compose image:\n{stderr.decode()}"
             )
 
-        status, stdout, stderr = run_command_full(
+        status, stdout, stderr = _run_command_full(
             [
                 "/usr/bin/env",
                 "docker-compose",
@@ -281,7 +343,7 @@ class App:
             return
 
         if (
-            run_command(
+            _run_command(
                 [
                     "/usr/bin/env",
                     "docker-compose",
@@ -302,7 +364,7 @@ class App:
         Returns whether an update was done.
         """
         if (
-            run_command(
+            _run_command(
                 ["/usr/bin/env", "git", "clone", "-b", self.branch, self.url, self.dir],
                 self.workdir,
             )
@@ -338,7 +400,7 @@ class App:
     def get_current_hash(self) -> str:
         """Return the git repository's current commit SHA."""
         return (
-            run_command_full(["/usr/bin/env", "git", "rev-parse", "HEAD"], self.dir)[1]
+            _run_command_full(["/usr/bin/env", "git", "rev-parse", "HEAD"], self.dir)[1]
             .decode()
             .strip()
         )
@@ -353,7 +415,7 @@ class App:
         matter what.
         """
         if (
-            run_command(
+            _run_command(
                 ["/usr/bin/env", "git", "remote", "set-url", "origin", self.url],
                 self.dir,
             )
@@ -362,7 +424,7 @@ class App:
             raise Exception("Could not set origin.")
 
         if (
-            run_command(
+            _run_command(
                 ["/usr/bin/env", "git", "fetch", "--force", "origin", self.branch],
                 self.dir,
             )
@@ -371,7 +433,7 @@ class App:
             raise Exception("Could not fetch from origin.")
 
         if (
-            run_command(
+            _run_command(
                 ["/usr/bin/env", "git", "reset", "--hard", f"origin/{self.branch}"],
                 self.dir,
             )
@@ -402,66 +464,28 @@ class App:
             raise last_exception
 
 
-def run_command_full(
-    command: List[str], chdir: Path, environment: Dict[str, str] = None
-) -> Tuple[int, bytes, bytes]:
-    """Run a command and return its exit code, stdout, and stderr."""
-    # Include the environment in our command.
-    env = os.environ.copy()
-    if environment:
-        env.update(environment)
+@attr.s(auto_attribs=True)
+class Configuration:
+    prune: bool = False
+    apps: List[App] = []
 
-    wd = os.getcwd()
-    os.chdir(chdir)
-    debug("Command: " + " ".join([str(x) for x in command]))
-    process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
-    )
-    stdout, stderr = process.communicate()
-    debug(f"Return code: {process.returncode}")
-    debug(stdout)
-    debug(stderr)
-    os.chdir(wd)
-    return (process.returncode, stdout, stderr)
-
-
-def run_command(
-    command: List[str], chdir: Path, environment: Dict[str, str] = None
-) -> int:
-    """Run a command and return its exit code."""
-    return run_command_full(command, chdir, environment=environment)[0]
-
-
-class AppManager:
-    def kill_orphan_containers(self, repo_id: str):
-        """
-        Kill all Docker containers for an app.
-
-        Instead of issuing a `docker-compose down`, this method looks for all
-        running containers that start with "{repo_id}_" (that's why it accepts
-        a string instead of an App instance).
-
-        That's because the configuration file might be missing, and we might
-        not know what the compose file's name is.
-        """
-        stdout = run_command_full(
-            ["/usr/bin/env", "docker", "ps", "-qf", f"name={repo_id}_"],
-            Path("."),
-        )[1]
-        if not stdout:
-            # `docker ps` returned nothing, ie nothing is running.
-            return
-
-        container_ids = stdout.decode().strip().split("\n")
-        return_codes = []
-        for container_id in container_ids:
-            debug(f"Stopping container {container_id}...")
-            return_codes.append(
-                run_command(["/usr/bin/env", "docker", "stop", container_id], Path("."))
-            )
-
-        if any(return_codes):
-            raise Exception("Could not stop some containers.")
+    @classmethod
+    def from_yaml(cls, config: str, workdir: Path) -> "Configuration":
+        configuration = yaml.safe_load(open(config))
+        cfg = configuration.get("config", {})
+        instance = cls(
+            prune=cfg.get("prune", False),
+            apps=[
+                App(
+                    id=repo_id,
+                    configuration=repo_config,
+                    config_filename=Path(config),
+                    workdir=workdir,
+                )
+                for repo_id, repo_config in configuration["apps"].items()
+            ],
+        )
+        return instance
 
 
 def process_config(apps: List[App], force_restart: bool = False) -> bool:
@@ -517,13 +541,12 @@ def archive_stale_data(repos: List[App], workdir: Path):
         x.name for x in (workdir / CACHES_DIR_NAME).iterdir() if x.is_dir()
     )
 
-    rm = AppManager()
     for stale_repo in current_repos - app_names:
         path = workdir / REPOS_DIR_NAME / stale_repo
         click.echo(
             f"The repo for {stale_repo} is stale, stopping any running containers..."
         )
-        rm.kill_orphan_containers(stale_repo)
+        _kill_orphan_containers(stale_repo)
         click.echo(f"Removing {path}...")
         shutil.rmtree(path)
 
@@ -585,22 +608,27 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
         # Create the necessary directories.
         (workdir / directory).mkdir(exist_ok=True)
 
-    configuration = yaml.safe_load(open(config))
-    if not configuration or not configuration.get("apps"):
+    configuration = Configuration.from_yaml(config, workdir)
+    if not configuration.apps:
         click.echo("No apps specified, nothing to do.")
         sys.exit(0)
 
-    apps = [
-        App(
-            id=repo_id,
-            configuration=repo_config,
-            config_filename=Path(config),
-            workdir=workdir,
+    archive_stale_data(configuration.apps, workdir)
+    success = process_config(configuration.apps, force_restart=force_restart)
+
+    if configuration.prune:
+        click.echo("Pruning all unused images...")
+        _run_command(
+            [
+                "/usr/bin/env",
+                "docker",
+                "system",
+                "prune",
+                "--all",
+                "--force",
+            ],
+            workdir,
         )
-        for repo_id, repo_config in configuration["apps"].items()
-    ]
-    archive_stale_data(apps, workdir)
-    success = process_config(apps, force_restart=force_restart)
     sys.exit(0 if success else 1)
 
 
