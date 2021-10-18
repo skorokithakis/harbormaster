@@ -1,7 +1,7 @@
 Harbormaster
 ============
 
-![PyPI](https://img.shields.io/pypi/v/docker_harbormaster)
+[![PyPI](https://img.shields.io/pypi/v/docker_harbormaster)](https://pypi.org/project/docker-harbormaster/)
 
 Harbormaster is a small utility that lets you easily deploy multiple
 Docker-Compose applications on a single host.
