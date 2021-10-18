@@ -98,6 +98,10 @@ Harbormaster uses a single YAML configuration file that's basically a list of
 repositories containing `docker-compose.yml` files/apps to deploy:
 
 ```yaml
+config:
+  # Prune *all unused* system images after a run. Good for saving space on the host.
+  # Careful, if you run this on a system with other Docker images, it will delete them.
+  prune: true
 apps:
   myapp:
     # The git repository URL to clone.
@@ -137,10 +141,6 @@ apps:
     enabled: false
     # Two apps can use the same repo.
     url: https://gitlab.com/otheruser/otherrepo.git
-config:
-  # Prune *all unused* system images after a run. Good for saving space on the host.
-  # Careful, if you run this on a system with other Docker images, it will delete them.
-  prune: true
 ```
 
 Then, just run Harbormaster in the same directory as that configuration file.
