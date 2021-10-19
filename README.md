@@ -168,6 +168,10 @@ Webhook](https://captain-webhook.readthedocs.io/).
 
 ## Recommended deployment
 
+**Note:** The Harbormaster Docker image is still relatively new, but it's a very
+convenient way to deploy Harbormaster without installing anything. That may become the
+recommended way to deploy Harbormaster in the future.
+
 The recommended way to run Harbormaster is on a timer. You can use systemd, with two
 files. Put the Harbormaster configuration YAML in a repository, and clone it somewhere.
 Then, use the two files to run Harbormaster in that repository.
@@ -218,6 +222,18 @@ sudo journalctl -fu harbormaster
 
 This will run Harbormaster every five minutes, pulling your configuration repository
 before the run.
+
+
+## Recommended repository layout
+
+Usually, you will have one repository per app. However, for small apps, like ones that
+already have a Docker container on the Docker Hub (and thus just need a Compose file),
+it might be more convenient to store the Compose file(s) in the same repository as the
+Harbormaster config, one branch per app.
+
+That way, you can pull the Harbormaster configuration and all the app definitions in the
+same way, from the same repository, and specify the branch to load the app from with the
+`branch` directive in the config.
 
 
 ## Recommended secrets handling
