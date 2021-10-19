@@ -50,6 +50,7 @@ def repos(tmp_path):
 
 
 def test_one_app(tmp_path, repos):
+    """Check a single-app scenario."""
     fn, commands = patched_run()
     working_dir = tmp_path / "working_dir"
     working_dir.mkdir()
