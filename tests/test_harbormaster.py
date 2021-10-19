@@ -8,6 +8,24 @@ from click.testing import CliRunner
 from docker_harbormaster import cli
 
 
+def patched_run():
+    """Mock _run_command_full so that we can get the commands."""
+    rcf = cli._run_command_full
+
+    commands = []
+
+    def inner(command, chdir, environment=None):
+        if "docker-compose" in command:
+            commands.append(" ".join(command))
+            return 0, b"", b""
+        else:
+            return rcf(command, chdir, environment=environment)
+
+    # Return the patched _run_command_full and the list that will eventually hold the
+    # commands.
+    return inner, commands
+
+
 def test_one_app():
     with tempfile.TemporaryDirectory() as hdir:
         hm_yml = f"""
@@ -37,18 +55,9 @@ def test_one_app():
         r.index.add(["harbormaster.yml", "docker-compose.yml"])
         r.index.commit("initial commit")
 
-        rcf = cli.run_command_full
-        commands = []
-
-        def patched_run(command, chdir, environment=None):
-            if "docker-compose" in command:
-                commands.append(" ".join(command))
-                return 0, b"", b""
-            else:
-                return rcf(command, chdir, environment=environment)
-
+        fn, commands = patched_run()
         with tempfile.TemporaryDirectory() as wdir, patch(
-            "docker_harbormaster.cli.run_command_full", side_effect=patched_run
+            "docker_harbormaster.cli._run_command_full", side_effect=fn
         ):
             runner = CliRunner()
             result = runner.invoke(

@@ -24,6 +24,7 @@ test:
     - poetry install --no-root
   script:
     - pre-commit run -a --hook-stage manual
+    - pytest
 
 build linux:
   stage: build
