@@ -82,12 +82,12 @@ def run_harbormaster(
     rcf_mock, commands = _patched_run()
     fn_cop = cli.App.clone_or_pull
     # Prepare a list of the functions' outputs.
-    output: Dict[str, Dict[str, bool]] = {"clone_or_pull": {}}
+    output: Dict[str, Dict[str, bool]] = {"updated_repo": {}}
 
     def cop_mock(self, *args, **kwargs):
         """A clone_or_pull mock."""
         retval = fn_cop(self, *args, **kwargs)
-        output["clone_or_pull"][self.id] = retval
+        output["updated_repo"][self.id] = retval
         return retval
 
     with patch("docker_harbormaster.cli._run_command_full", side_effect=rcf_mock):

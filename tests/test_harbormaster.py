@@ -90,7 +90,7 @@ def test_branches(tmp_path: Path, repos: Dict[str, Repository]):
 
     assert result.exit_code == 0
     assert result.output
-    assert output["clone_or_pull"] == {"app1": True, "app2": True}
+    assert output["updated_repo"] == {"app1": True, "app2": True}
     assert output["commands"] == [
         "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker-compose -f docker-compose.yml pull",
@@ -110,7 +110,7 @@ def test_branches(tmp_path: Path, repos: Dict[str, Repository]):
 
     assert result.exit_code == 0
     assert result.output
-    assert output["clone_or_pull"] == {"app1": False, "app2": True}
+    assert output["updated_repo"] == {"app1": False, "app2": True}
     assert output["commands"] == [
         "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker-compose -f docker-compose.yml pull",
