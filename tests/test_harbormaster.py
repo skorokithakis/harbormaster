@@ -1,73 +1,21 @@
-import os
-from contextlib import contextmanager
-from pathlib import Path
-from typing import Iterable
-from typing import Tuple
 from unittest.mock import patch
 
-import git
+import pytest
 from click.testing import CliRunner
+from utils import create_repository
+from utils import patched_run
 
 from docker_harbormaster import cli
 
 
-@contextmanager
-def _chdir(path: Path):
-    """Sets the cwd within the context."""
-    origin = Path().absolute()
-    try:
-        os.chdir(path)
-        yield
-    finally:
-        os.chdir(origin)
-
-
-def _patched_run():
-    """Mock _run_command_full so that we can get the commands."""
-    rcf = cli._run_command_full
-
-    commands = []
-
-    def inner(command, chdir, environment=None):
-        if "docker-compose" in command:
-            commands.append(" ".join(command))
-            return 0, b"", b""
-        else:
-            return rcf(command, chdir, environment=environment)
-
-    # Return the patched _run_command_full and the list that will eventually hold the
-    # commands.
-    return inner, commands
-
-
-def create_repository(path: Path, contents: Iterable[Tuple[str, str]]):
-    """
-    Create a repository with the specified contents.
-
-    Contents should be an iterable of (filename, contents) tuples.
-    """
-    repo = git.Repo.init(path)
-    with _chdir(path):
-        for filename, content in contents:
-            with open(filename, "w") as outfile:
-                outfile.write(content)
-            repo.index.add(filename)
-    repo.index.commit("Initial commit")
-
-
-def test_one_app(tmp_path):
-    create_repository(
-        tmp_path / "harbormaster",
+@pytest.fixture()
+def repos(tmp_path):
+    """Set up the required repositories for the tests."""
+    repos = {}
+    # Create the app repo.
+    repos["app1"] = create_repository(
+        tmp_path / "app1",
         (
-            (
-                "harbormaster.yml",
-                f"""
-                apps:
-                  myapp:
-                    url: {tmp_path}/harbormaster
-                """,
-            ),
-            ("harbormaster2.yml", "hi"),
             (
                 "docker-compose.yml",
                 """
@@ -84,7 +32,25 @@ def test_one_app(tmp_path):
         ),
     )
 
-    fn, commands = _patched_run()
+    # Create the Harbormaster config repo.
+    repos["config"] = create_repository(
+        tmp_path / "harbormaster",
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  myapp:
+                    url: {tmp_path}/app1/
+                """,
+            ),
+        ),
+    )
+    return repos
+
+
+def test_one_app(tmp_path, repos):
+    fn, commands = patched_run()
     working_dir = tmp_path / "working_dir"
     working_dir.mkdir()
     with patch("docker_harbormaster.cli._run_command_full", side_effect=fn):
@@ -93,7 +59,7 @@ def test_one_app(tmp_path):
             cli.cli,
             [
                 "--config",
-                f"{tmp_path}/harbormaster/harbormaster.yml",
+                f"{repos['config'].working_tree_dir}/harbormaster.yml",
                 "--working-dir",
                 str(working_dir),
             ],
