@@ -9,6 +9,12 @@ import git
 from docker_harbormaster import cli
 
 
+def mkdir(path: Path) -> Path:
+    """Create a directory out of a path and return that path."""
+    path.mkdir(exist_ok=True)
+    return path
+
+
 @contextmanager
 def chdir(path: Path):
     """Sets the cwd within the context."""

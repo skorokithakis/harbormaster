@@ -3,6 +3,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 from utils import create_repository
+from utils import mkdir
 from utils import patched_run
 
 from docker_harbormaster import cli
@@ -12,6 +13,7 @@ from docker_harbormaster import cli
 def repos(tmp_path):
     """Set up the required repositories for the tests."""
     repos = {}
+
     # Create the app repo.
     repos["app1"] = create_repository(
         tmp_path / "app1",
@@ -52,8 +54,6 @@ def repos(tmp_path):
 def test_one_app(tmp_path, repos):
     """Check a single-app scenario."""
     fn, commands = patched_run()
-    working_dir = tmp_path / "working_dir"
-    working_dir.mkdir()
     with patch("docker_harbormaster.cli._run_command_full", side_effect=fn):
         runner = CliRunner()
         result = runner.invoke(
@@ -62,12 +62,12 @@ def test_one_app(tmp_path, repos):
                 "--config",
                 f"{repos['config'].working_tree_dir}/harbormaster.yml",
                 "--working-dir",
-                str(working_dir),
+                str(mkdir(tmp_path / "working_dir")),
             ],
         )
 
-        assert result.exit_code == 0, result.output
-
+        assert result.exit_code == 0
+        assert result.output
         assert commands == [
             "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
             "/usr/bin/env docker-compose -f docker-compose.yml pull",
