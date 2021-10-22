@@ -5,6 +5,8 @@
 
 ### Features
 
+* Restart an app if its environment vars change. [Stavros Korokithakis]
+
 * Add image pruning config option. [Stavros Korokithakis]
 
 * Allow Docker-supported installations. [Stavros Korokithakis]

@@ -541,7 +541,7 @@ class Configuration:
 def process_config(configuration: Configuration, force_restart: bool = False) -> bool:
     """Process a given configuration file."""
     successes = []
-    cache = {}
+    cache = {"version": 1}
     for app in configuration.apps:
         debug("-" * 100)
         click.echo(f"Updating {app.id} ({app.branch})...")
