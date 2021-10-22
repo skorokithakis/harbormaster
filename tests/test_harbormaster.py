@@ -81,6 +81,108 @@ def test_one_app(tmp_path: Path, repos: Dict[str, Repository]):
     ]
 
 
+def test_env_changes(tmp_path: Path, repos: Dict[str, Repository]):
+    """Check a single-app scenario."""
+    repos["config"].add_files(
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  myapp:
+                    url: {repos['apps'].path}
+                """,
+            ),
+        ),
+    )
+    result, output = run_harbormaster(tmp_path, repos)
+
+    assert result.exit_code == 0
+    assert result.output
+    assert output["restarted_apps"] == {"myapp"}
+    assert output["commands"] == [
+        "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
+        "/usr/bin/env docker-compose -f docker-compose.yml pull",
+        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build -d",
+    ]
+
+    repos["config"].add_files(
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  myapp:
+                    url: {repos['apps'].path}
+                    environment:
+                      foo: bar
+                """,
+            ),
+        ),
+    )
+
+    assert result.exit_code == 0
+    assert result.output
+    assert output["restarted_apps"] == {"myapp"}
+    assert output["commands"] == [
+        "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
+        "/usr/bin/env docker-compose -f docker-compose.yml pull",
+        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build -d",
+    ]
+
+    result, output = run_harbormaster(tmp_path, repos)
+    assert result.exit_code == 0
+    assert output["restarted_apps"] == {"myapp"}
+
+    repos["config"].add_files(
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  myapp:
+                    url: {repos['apps'].path}
+                    environment:
+                      foo: bar
+                      baz: hello
+                  app1:
+                    url: {repos['apps'].path}
+                    branch: app1
+                """,
+            ),
+        ),
+    )
+
+    result, output = run_harbormaster(tmp_path, repos)
+    assert result.exit_code == 0
+    assert output["restarted_apps"] == {"myapp", "app1"}
+
+    repos["config"].add_files(
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  myapp:
+                    url: {repos['apps'].path}
+                    environment:
+                      foo: bar
+                      baz: hello
+                    replacements:
+                      hi: there
+                  app1:
+                    url: {repos['apps'].path}
+                    branch: app1
+                """,
+            ),
+        ),
+    )
+
+    result, output = run_harbormaster(tmp_path, repos)
+    assert result.exit_code == 0
+    assert output["restarted_apps"] == {"myapp"}
+
+
 def test_branches(tmp_path: Path, repos: Dict[str, Repository]):
     """Check the scenario where every app is a branch in the same repo."""
     # Create a config that runs apps in branches.
@@ -105,7 +207,7 @@ def test_branches(tmp_path: Path, repos: Dict[str, Repository]):
 
     assert result.exit_code == 0
     assert result.output
-    assert output["updated_repo"] == {"app1": True, "app2": True}
+    assert output["restarted_apps"] == {"app1", "app2"}
 
     # Change the app in one branch and ensure the other one didn't restart.
     repos["apps"].checkout("app2")
@@ -117,7 +219,7 @@ def test_branches(tmp_path: Path, repos: Dict[str, Repository]):
 
     assert result.exit_code == 0
     assert result.output
-    assert output["updated_repo"] == {"app1": False, "app2": True}
+    assert output["restarted_apps"] == {"app2"}
 
 
 def test_changing_remotes(tmp_path: Path, repos: Dict[str, Repository]):
@@ -142,7 +244,7 @@ def test_changing_remotes(tmp_path: Path, repos: Dict[str, Repository]):
 
     assert result.exit_code == 0
     assert result.output
-    assert output["updated_repo"] == {"app1": True, "app2": True}
+    assert output["restarted_apps"] == {"app1", "app2"}
 
     # Change remotes.
     repos["config"].add_files(
@@ -166,4 +268,4 @@ def test_changing_remotes(tmp_path: Path, repos: Dict[str, Repository]):
 
     assert result.exit_code == 0
     assert result.output
-    assert output["updated_repo"] == {"app1": False, "app2": False}
+    assert output["restarted_apps"] == set()

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import ast
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -26,6 +28,8 @@ REPOS_DIR_NAME = "repos"
 CACHES_DIR_NAME = "caches"
 DATA_DIR_NAME = "data"
 
+CACHE_FILE_NAME = ".harbormaster.cache"
+
 MAX_GIT_NETWORK_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 10
 
@@ -34,6 +38,11 @@ def debug(message: Any) -> None:
     """Print a message if DEBUG is True."""
     if DEBUG:
         click.echo(message)
+
+
+def _hash_dict(d: Dict) -> str:
+    """Repeatably hash a dict."""
+    return hashlib.sha1(str(sorted(d.items())).encode()).hexdigest()
 
 
 def _render_template(template: str, replacements: Dict[str, Any]) -> str:
@@ -183,6 +192,7 @@ class App:
         configuration: Dict[str, Any],
         config_filename: Path,
         workdir: Path,
+        cache=Dict[str, str],
     ):
         self.id: str = id
         self.enabled: bool = configuration.get("enabled", True)
@@ -194,6 +204,7 @@ class App:
         self.compose_config: List[str] = cfn
         self.branch: str = configuration.get("branch", "master")
         self.workdir = workdir
+        self.cache = cache
 
         self.environment: Dict[str, str] = _read_var_file(
             filename=configuration.get("environment_file"),
@@ -218,6 +229,33 @@ class App:
                 for key, value in configuration.get("replacements", {}).items()
             }
         )
+
+    def check_parameter_changes(self) -> bool:
+        """
+        Check if the environment/replacements have changed since the last run.
+
+        We do this by hashing the environment/replacements dictionaries and comparing
+        those hashes to the hashes in the cache file. If anything goes wrong, we do the
+        safe thing and return `True`.
+
+        We also update `self.cache` with the new values, for later writing.
+        """
+        env_hash = _hash_dict(self.environment)
+        replacements_hash = _hash_dict(self.replacements)
+
+        old_env_hash = self.cache.get("environment_hash", "")
+        old_replacements_hash = self.cache.get("replacements_hash", "")
+
+        debug(f"Old env hash: {old_env_hash}\nNew env hash: {env_hash}")
+        debug(
+            f"Old replacements hash: {old_replacements_hash}"
+            f"\nNew replacements hash: {replacements_hash}"
+        )
+
+        self.cache["environment_hash"] = env_hash
+        self.cache["replacements_hash"] = replacements_hash
+
+        return env_hash != old_env_hash or replacements_hash != old_replacements_hash
 
     @property
     def compose_config_command(self) -> List[str]:
@@ -466,21 +504,33 @@ class App:
 
 @attr.s(auto_attribs=True)
 class Configuration:
+    workdir: Path
     prune: bool = False
     apps: List[App] = []
 
     @classmethod
     def from_yaml(cls, config: str, workdir: Path) -> "Configuration":
+        # Read the cache from the cache file.
+        cache_file = workdir / CACHE_FILE_NAME
+        cache = {}
+        try:
+            if cache_file.exists():
+                cache = json.loads(cache_file.read_text())
+        except Exception as e:
+            click.echo(f"Error while reading cache: {e}")
+
         configuration = yaml.safe_load(open(config))
         cfg = configuration.get("config", {})
         instance = cls(
             prune=cfg.get("prune", False),
+            workdir=workdir,
             apps=[
                 App(
                     id=repo_id,
                     configuration=repo_config,
                     config_filename=Path(config),
                     workdir=workdir,
+                    cache=cache.get(repo_id, {}),
                 )
                 for repo_id, repo_config in configuration["apps"].items()
             ],
@@ -488,10 +538,11 @@ class Configuration:
         return instance
 
 
-def process_config(apps: List[App], force_restart: bool = False) -> bool:
+def process_config(configuration: Configuration, force_restart: bool = False) -> bool:
     """Process a given configuration file."""
     successes = []
-    for app in apps:
+    cache = {}
+    for app in configuration.apps:
         debug("-" * 100)
         click.echo(f"Updating {app.id} ({app.branch})...")
         try:
@@ -503,15 +554,17 @@ def process_config(apps: List[App], force_restart: bool = False) -> bool:
                 debug(f"{app.id} is disabled, will not pull.")
                 updated_repo = False
 
+            parameters_changed = app.check_parameter_changes()
+
             # The app needs to be restarted, or is not enabled, so stop it.
             if app.repo_dir_exists and (
-                updated_repo or force_restart or not app.enabled
+                updated_repo or parameters_changed or force_restart or not app.enabled
             ):
                 click.echo(f"{app.id}: Stopping...")
                 app.stop()
-                stopped: Optional[bool] = True
+                stopped = True
             else:
-                stopped = None
+                stopped = False
 
             # The app is not running and it should be, so start it.
             if app.enabled and (stopped or not app.is_running()):
@@ -519,11 +572,19 @@ def process_config(apps: List[App], force_restart: bool = False) -> bool:
                 click.echo(f"{app.id}: Starting...")
             else:
                 click.echo(f"{app.id}: App does not need to be started.")
+
+            cache[app.id] = app.cache
+
             successes.append(True)
         except Exception as e:
+            raise
             click.echo(f"{app.id}: Error while processing: {e}")
             successes.append(False)
         click.echo("")
+
+    # Write the cache.
+    cache_file = configuration.workdir / CACHE_FILE_NAME
+    cache_file.write_text(json.dumps(cache))
 
     return all(successes)
 
@@ -614,7 +675,7 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
         sys.exit(0)
 
     archive_stale_data(configuration.apps, workdir)
-    success = process_config(configuration.apps, force_restart=force_restart)
+    success = process_config(configuration, force_restart=force_restart)
 
     if configuration.prune:
         click.echo("Pruning all unused images...")

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import Iterable
+from typing import Set
 from typing import Tuple
 from unittest.mock import patch
 
@@ -80,24 +81,24 @@ def run_harbormaster(
 ) -> Tuple[Any, Dict[str, Any]]:
     """I'm terribly sorry about this, it was the only way."""
     rcf_mock, commands = _patched_run()
-    fn_cop = cli.App.clone_or_pull
+    fn_stop = cli.App.stop
     # Prepare a list of the functions' outputs.
-    output: Dict[str, Dict[str, bool]] = {"updated_repo": {}}
+    output: Dict[str, Set[str]] = {"restarted_apps": set()}
 
-    def cop_mock(self, *args, **kwargs):
-        """A clone_or_pull mock."""
-        retval = fn_cop(self, *args, **kwargs)
-        output["updated_repo"][self.id] = retval
-        return retval
+    def stop_mock(self, *args, **kwargs):
+        """A stop() mock."""
+        output["restarted_apps"].add(self.id)
+        return fn_stop(self, *args, **kwargs)
 
     with patch("docker_harbormaster.cli._run_command_full", side_effect=rcf_mock):
-        with patch.object(cli.App, "clone_or_pull", cop_mock):
+        with patch.object(cli.App, "stop", stop_mock):
             runner = CliRunner()
             result = runner.invoke(
                 cli.cli,
                 [
                     "--config",
                     f"{repos['config'].path}/harbormaster.yml",
+                    "--debug",
                     "--working-dir",
                     str(mkdir(tmp_path / "working_dir")),
                 ],
