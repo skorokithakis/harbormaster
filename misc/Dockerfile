@@ -1,5 +1,8 @@
 FROM ubuntu:20.04
 
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 RUN apt-get update && apt-get install -y python3-pip docker.io cron
 
 RUN pip install poetry
