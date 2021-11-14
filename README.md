@@ -84,6 +84,12 @@ docker run -d \
 Harbormaster will now run every five minutes, pull your config repository (from whatever
 remote it has), and run the apps in the config.
 
+If you want to run it immediately at some point, you can use the following command:
+
+```bash
+$ docker exec -i -t <container id> /usr/bin/entrypoint.sh
+```
+
 
 ## High-level architecture overview
 
