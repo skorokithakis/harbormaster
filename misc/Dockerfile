@@ -11,14 +11,15 @@ RUN mkdir /root/.ssh/
 RUN /bin/echo -e "Host *\n\tStrictHostKeyChecking no\n\tIdentityFile /config/ssh_private_key\n" > ~/.ssh/config
 
 
-RUN mkdir /config
-RUN mkdir /main
+RUN mkdir /config /main /hm-src
 
 VOLUME /main
 VOLUME /config
 
+COPY . /hm-src/
+
 # Install Harbormaster.
-RUN pip install docker-harbormaster==IMAGE_VERSION
+RUN pip install /hm-src/
 
 # Add the crontab.
 COPY misc/crontab /etc/cron.d/harbormaster
