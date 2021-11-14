@@ -209,31 +209,13 @@ class Paths:
     @classmethod
     def for_workdir(cls, workdir: Path):
         """Derive the working paths from a base workdir path."""
-        data_dir = workdir / DATA_DIR_NAME
-        archives_dir = workdir / ARCHIVES_DIR_NAME
-        repos_dir = workdir / REPOS_DIR_NAME
-        caches_dir = workdir / CACHES_DIR_NAME
-        cache_file = workdir / CACHE_FILE_NAME
-
-        # There's a particularity in how the Docker deployment of Harbormaster (ie
-        # running Harbormaster itself in a container) works: Harbormaster inside the
-        # container tries to tell Compose to mount the apps' volumes in its working
-        # directory, but Compose mounts them on the *host* instead. This is because
-        # Compose doesn't know that the caller is in a container, it just sees someone
-        # ask it to mount the `data` volume into `/main/data/someapp`.
-        # We work around that with a hack here by looking for an environment variable
-        # with the path to mount on the host.
-        data_env_var = os.environ.get("HARBORMASTER_HOST_DATA")
-        if data_env_var:
-            data_dir = Path(data_env_var)
-
         return cls(
             workdir=workdir,
-            archives_dir=archives_dir,
-            repos_dir=repos_dir,
-            caches_dir=caches_dir,
-            data_dir=data_dir,
-            cache_file=cache_file,
+            data_dir=workdir / DATA_DIR_NAME,
+            archives_dir=workdir / ARCHIVES_DIR_NAME,
+            repos_dir=workdir / REPOS_DIR_NAME,
+            caches_dir=workdir / CACHES_DIR_NAME,
+            cache_file=workdir / CACHE_FILE_NAME,
         )
 
 
@@ -341,12 +323,28 @@ class App:
 
         This replaces variables like {{ HM_DATA_DIR }} with their value counterparts.
         """
+        # There's a particularity in how the Docker deployment of Harbormaster (ie
+        # running Harbormaster itself in a container) works: Harbormaster inside the
+        # container tries to tell Compose to mount the apps' volumes in its working
+        # directory, but Compose mounts them on the *host* instead. This is because
+        # Compose doesn't know that the caller is in a container, it just sees someone
+        # ask it to mount the `data` volume into `/main/data/someapp`.
+        # We work around that with a hack here by looking for an environment variable
+        # with the path to mount on the host.
+
+        data_env_var = os.environ.get("HARBORMASTER_HOST_DATA")
+        data_dir = (
+            (Path(data_env_var) / DATA_DIR_NAME)
+            if data_env_var
+            else self.paths.data_dir
+        )
+
         for cfn in self.compose_config:
             with (self.dir / cfn).open("r+") as cfile:
                 contents = cfile.read()
 
                 replacements = {
-                    "DATA_DIR": str(self.paths.data_dir / self.id),
+                    "DATA_DIR": str(data_dir / self.id),
                     "CACHE_DIR": str(self.paths.caches_dir / self.id),
                     "REPO_DIR": str(self.paths.repos_dir / self.id),
                 }
