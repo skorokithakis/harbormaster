@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 set -eux
 
@@ -17,6 +17,8 @@ sed "s/IMAGE_VERSION/$IMAGE_VERSION/g" misc/Dockerfile > "$TMP_DIR/Dockerfile"
 echo "Building $IMAGE_NAME..."
 docker build -f "$TMP_DIR/Dockerfile" -t "$IMAGE_NAME" -t "$IMAGE_BASE:latest" .
 
-echo "Pushing $IMAGE_NAME..."
-docker push "$IMAGE_NAME"
-docker push "$IMAGE_BASE:latest"
+if [[ "${1-}" == "--push" ]]; then
+    echo "Pushing $IMAGE_NAME..."
+    docker push "$IMAGE_NAME"
+    docker push "$IMAGE_BASE:latest"
+fi
