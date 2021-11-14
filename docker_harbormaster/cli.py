@@ -185,13 +185,52 @@ def _run_command(
     return _run_command_full(command, chdir, environment=environment)[0]
 
 
+@attr.s(auto_attribs=True)
+class Paths:
+    """The relevant working paths for this specific configuration run."""
+
+    workdir: Path
+    archives_dir: Path
+    repos_dir: Path
+    caches_dir: Path
+    data_dir: Path
+    cache_file: Path
+
+    def create_directories(self):
+        """Create all the necessary directories."""
+        for directory in (
+            self.archives_dir,
+            self.repos_dir,
+            self.caches_dir,
+            self.data_dir,
+        ):
+            directory.mkdir(exist_ok=True)
+
+    @classmethod
+    def for_workdir(cls, workdir: Path):
+        """Derive the working paths from a base workdir path."""
+        data_dir = workdir / DATA_DIR_NAME
+        archives_dir = workdir / ARCHIVES_DIR_NAME
+        repos_dir = workdir / REPOS_DIR_NAME
+        caches_dir = workdir / CACHES_DIR_NAME
+        cache_file = workdir / CACHE_FILE_NAME
+        return cls(
+            workdir=workdir,
+            archives_dir=archives_dir,
+            repos_dir=repos_dir,
+            caches_dir=caches_dir,
+            data_dir=data_dir,
+            cache_file=cache_file,
+        )
+
+
 class App:
     def __init__(
         self,
         id: str,
         configuration: Dict[str, Any],
         config_filename: Path,
-        workdir: Path,
+        paths: Paths,
         cache=Dict[str, str],
     ):
         self.id: str = id
@@ -203,7 +242,7 @@ class App:
             cfn = [cfn]
         self.compose_config: List[str] = cfn
         self.branch: str = configuration.get("branch", "master")
-        self.workdir = workdir
+        self.paths = paths
         self.cache = cache
 
         self.environment: Dict[str, str] = _read_var_file(
@@ -275,7 +314,8 @@ class App:
 
     @property
     def dir(self):
-        return self.workdir / REPOS_DIR_NAME / self.id
+        """Return the app repo directory path."""
+        return self.paths.repos_dir / self.id
 
     @property
     def repo_dir_exists(self) -> bool:
@@ -293,9 +333,9 @@ class App:
                 contents = cfile.read()
 
                 replacements = {
-                    "DATA_DIR": str(self.workdir / DATA_DIR_NAME / self.id),
-                    "CACHE_DIR": str(self.workdir / CACHES_DIR_NAME / self.id),
-                    "REPO_DIR": str(self.workdir / REPOS_DIR_NAME / self.id),
+                    "DATA_DIR": str(self.paths.data_dir / self.id),
+                    "CACHE_DIR": str(self.paths.caches_dir / self.id),
+                    "REPO_DIR": str(self.paths.repos_dir / self.id),
                 }
                 replacements.update(self.replacements)
                 contents = _render_template(contents, replacements)
@@ -404,7 +444,7 @@ class App:
         if (
             _run_command(
                 ["/usr/bin/env", "git", "clone", "-b", self.branch, self.url, self.dir],
-                self.workdir,
+                self.paths.workdir,
             )
             != 0
         ):
@@ -504,18 +544,17 @@ class App:
 
 @attr.s(auto_attribs=True)
 class Configuration:
-    workdir: Path
+    paths: Paths
     prune: bool = False
     apps: List[App] = []
 
     @classmethod
-    def from_yaml(cls, config: str, workdir: Path) -> "Configuration":
+    def from_yaml(cls, config: str, paths: Paths) -> "Configuration":
         # Read the cache from the cache file.
-        cache_file = workdir / CACHE_FILE_NAME
         cache = {}
         try:
-            if cache_file.exists():
-                cache = json.loads(cache_file.read_text())
+            if paths.cache_file.exists():
+                cache = json.loads(paths.cache_file.read_text())
         except Exception as e:
             click.echo(f"Error while reading cache: {e}")
 
@@ -523,13 +562,13 @@ class Configuration:
         cfg = configuration.get("config", {})
         instance = cls(
             prune=cfg.get("prune", False),
-            workdir=workdir,
+            paths=paths,
             apps=[
                 App(
                     id=repo_id,
                     configuration=repo_config,
                     config_filename=Path(config),
-                    workdir=workdir,
+                    paths=paths,
                     cache=cache.get(repo_id, {}),
                 )
                 for repo_id, repo_config in configuration["apps"].items()
@@ -583,27 +622,21 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
         click.echo("")
 
     # Write the cache.
-    cache_file = configuration.workdir / CACHE_FILE_NAME
+    cache_file = configuration.paths.cache_file
     cache_file.write_text(json.dumps(cache))
 
     return all(successes)
 
 
-def archive_stale_data(repos: List[App], workdir: Path):
+def archive_stale_data(repos: List[App], paths: Paths):
     app_names = set(repo.id for repo in repos)
 
-    current_repos = set(
-        x.name for x in (workdir / REPOS_DIR_NAME).iterdir() if x.is_dir()
-    )
-    current_data = set(
-        x.name for x in (workdir / DATA_DIR_NAME).iterdir() if x.is_dir()
-    )
-    current_caches = set(
-        x.name for x in (workdir / CACHES_DIR_NAME).iterdir() if x.is_dir()
-    )
+    current_repos = set(x.name for x in paths.repos_dir.iterdir() if x.is_dir())
+    current_data = set(x.name for x in paths.data_dir.iterdir() if x.is_dir())
+    current_caches = set(x.name for x in paths.caches_dir.iterdir() if x.is_dir())
 
     for stale_repo in current_repos - app_names:
-        path = workdir / REPOS_DIR_NAME / stale_repo
+        path = paths.repos_dir / stale_repo
         click.echo(
             f"The repo for {stale_repo} is stale, stopping any running containers..."
         )
@@ -612,16 +645,16 @@ def archive_stale_data(repos: List[App], workdir: Path):
         shutil.rmtree(path)
 
     for stale_data in current_data - app_names:
-        path = workdir / DATA_DIR_NAME / stale_data
+        path = paths.data_dir / stale_data
         click.echo(f"The data for {stale_data} is stale, archiving {path}...")
         path.rename(
-            workdir
+            paths.workdir
             / ARCHIVES_DIR_NAME
             / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
         )
 
     for stale_caches in current_caches - app_names:
-        path = workdir / CACHES_DIR_NAME / stale_caches
+        path = paths.caches_dir / stale_caches
         click.echo(f"The cache for {stale_caches} is stale, deleting {path}...")
         shutil.rmtree(path)
 
@@ -660,21 +693,15 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
     DEBUG = debug
 
     workdir = Path(working_dir)
-    for directory in (
-        ARCHIVES_DIR_NAME,
-        CACHES_DIR_NAME,
-        DATA_DIR_NAME,
-        REPOS_DIR_NAME,
-    ):
-        # Create the necessary directories.
-        (workdir / directory).mkdir(exist_ok=True)
+    paths = Paths.for_workdir(workdir)
+    paths.create_directories()
 
-    configuration = Configuration.from_yaml(config, workdir)
+    configuration = Configuration.from_yaml(config, paths)
     if not configuration.apps:
         click.echo("No apps specified, nothing to do.")
         sys.exit(0)
 
-    archive_stale_data(configuration.apps, workdir)
+    archive_stale_data(configuration.apps, paths)
     success = process_config(configuration, force_restart=force_restart)
 
     if configuration.prune:
