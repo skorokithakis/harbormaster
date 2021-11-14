@@ -214,6 +214,19 @@ class Paths:
         repos_dir = workdir / REPOS_DIR_NAME
         caches_dir = workdir / CACHES_DIR_NAME
         cache_file = workdir / CACHE_FILE_NAME
+
+        # There's a particularity in how the Docker deployment of Harbormaster (ie
+        # running Harbormaster itself in a container) works: Harbormaster inside the
+        # container tries to tell Compose to mount the apps' volumes in its working
+        # directory, but Compose mounts them on the *host* instead. This is because
+        # Compose doesn't know that the caller is in a container, it just sees someone
+        # ask it to mount the `data` volume into `/main/data/someapp`.
+        # We work around that with a hack here by looking for an environment variable
+        # with the path to mount on the host.
+        data_env_var = os.environ.get("HARBORMASTER_HOST_DATA")
+        if data_env_var:
+            data_dir = Path(data_env_var)
+
         return cls(
             workdir=workdir,
             archives_dir=archives_dir,
