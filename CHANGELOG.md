@@ -11,6 +11,10 @@
 
 * Allow Docker-supported installations. [Stavros Korokithakis]
 
+### Fixes
+
+* Fix wrong volume path when Harbormaster is deployed inside Docker. [Stavros Korokithakis]
+
 
 ## v0.1.19 (2021-10-09)
 
