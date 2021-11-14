@@ -16,18 +16,19 @@ RUN mkdir /config /main /hm-src
 VOLUME /main
 VOLUME /config
 
-COPY . /hm-src/
-
-# Install Harbormaster.
-RUN pip install /hm-src/
-
 # Add the crontab.
 COPY misc/crontab /etc/cron.d/harbormaster
 RUN chmod 0644 /etc/cron.d/harbormaster && \
     crontab /etc/cron.d/harbormaster
 
-COPY misc/entrypoint.sh /usr/bin/
+COPY misc/run-harbormaster /usr/bin/
+COPY misc/entrypoint /usr/bin/
+
+COPY . /hm-src/
+
+# Install Harbormaster.
+RUN pip install /hm-src/
 
 WORKDIR /config
 
-CMD ["cron", "-f"]
+CMD ["/usr/bin/entrypoint"]

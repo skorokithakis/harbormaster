@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+# This script is the entrypoint for the container Harbormaster is deployed in. It
+# forwards some environment variables and starts cron.
+
+set -euox pipefail
+
+printenv | grep -E "^HARBORMASTER" | sed 's/^\(.*\)$/export \1/g' > /root/project_env.sh
+
+# Run Harbormaster once before starting cron, because cron waits until it's time before
+# it actually runs anything, which is bad UX.
+run-harbormaster
+
+cron -f
