@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
 
-# This script is the entrypoint for the container Harbormaster is deployed in. It
-# forwards some environment variables and starts cron.
+set -euo pipefail
 
-set -euox pipefail
+# This script is the entrypoint for the container Harbormaster itself is deployed in.
+#
+# Because Harbormaster starts other Docker apps with Compose, it specifies some paths to
+# Mount the apps' data on. However, because of the way Docker works, those paths are
+# Actually *on the host*, and not inside this container.
+#
+# That means that Harbormaster must know the path on the host that it's mounted in, so it
+# Can pass it on to the apps it manages. The way we do that is by using `docker inspect`
+# To inspect our own running container and see what we were run with.
+#
+# It's a lot of hackery, but that just mirrors life.
 
-printenv | grep -E "^HARBORMASTER" | sed 's/^\(.*\)$/export \1/g' > /root/project_env.sh
+
+# Get the mounts of the container HM is currently running in.
+CONTAINER_MOUNTS=$(docker inspect --format='{{json .Mounts}}' "$(docker ps -qf 'ancestor=stavros/harbormaster')")
+
+# Find the mount whose destination starts with `/main` and use that as the host data
+# path. We do this by searching for the mountpoint of type `bind` (not `volume`, as
+# that's what Docker uses when the volume was omitted) and that starts with `/main`.
+echo "$CONTAINER_MOUNTS" | python3 -c "import json, sys; x = [x['Source'] for x in json.loads(sys.stdin.read()) if x['Destination'].startswith('/main') and x['Type'] == 'bind']; print('export HARBORMASTER_HOST_DATA=' + x[0]) if x else sys.exit('Harbormaster error: /main volume not mounted properly.')" > /root/project_env.sh
 
 # Run Harbormaster once before starting cron, because cron waits until it's time before
 # it actually runs anything, which is bad UX.

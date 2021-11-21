@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Forward environment variables from the host to the Dockerized HM instance. [Stavros Korokithakis]
+
+
 ## v0.1.20 (2021-11-14)
 
 ### Features

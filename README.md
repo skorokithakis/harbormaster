@@ -77,7 +77,6 @@ docker run -d \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v <the path to your config directory>:/config \
     -v <the path to your Harbormaster working directory>:/main \
-    -e HARBORMASTER_HOST_DATA=<the path to your Harbormaster working directory> \
     stavros/harbormaster
 ```
 
