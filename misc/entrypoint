@@ -15,13 +15,11 @@ set -euo pipefail
 # It's a lot of hackery, but that just mirrors life.
 
 
-# Get the mounts of the container HM is currently running in.
-CONTAINER_MOUNTS=$(docker inspect --format='{{json .Mounts}}' "$(docker ps | awk '/stavros\/harbormaster/ {print $1}')")
-
 # Find the mount whose destination starts with `/main` and use that as the host data
 # path. We do this by searching for the mountpoint of type `bind` (not `volume`, as
 # that's what Docker uses when the volume was omitted) and that starts with `/main`.
-echo "$CONTAINER_MOUNTS" | python3 -c "import json, sys; x = [x['Source'] for x in json.loads(sys.stdin.read()) if x['Destination'].startswith('/main') and x['Type'] == 'bind']; print('export HARBORMASTER_HOST_DATA=' + x[0]) if x else sys.exit('Harbormaster error: /main volume not mounted properly.')" > /root/project_env.sh
+MOUNTS=$(docker inspect "$HOSTNAME" -f '{{range .Mounts }}{{ .Type }} {{ .Destination }} {{ .Source }}{{ printf "\n" }}{{ end }}')
+echo "$MOUNTS" | awk '/^bind \/main/ {print "HARBORMASTER_HOST_DATA=" $3}' > /root/project_env.sh
 
 # Run Harbormaster once before starting cron, because cron waits until it's time before
 # it actually runs anything, which is bad UX.
