@@ -16,7 +16,7 @@ set -euo pipefail
 
 
 # Get the mounts of the container HM is currently running in.
-CONTAINER_MOUNTS=$(docker inspect --format='{{json .Mounts}}' "$(docker ps -qf 'ancestor=stavros/harbormaster')")
+CONTAINER_MOUNTS=$(docker inspect --format='{{json .Mounts}}' "$(docker ps | awk '/stavros\/harbormaster/ {print $1}')")
 
 # Find the mount whose destination starts with `/main` and use that as the host data
 # path. We do this by searching for the mountpoint of type `bind` (not `volume`, as

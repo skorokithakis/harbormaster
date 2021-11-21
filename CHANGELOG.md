@@ -5,6 +5,8 @@
 
 ### Fixes
 
+* Remove the need for passing the data path to the HM container. [Stavros Korokithakis]
+
 * Forward environment variables from the host to the Dockerized HM instance. [Stavros Korokithakis]
 
 
