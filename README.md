@@ -271,9 +271,13 @@ repo, and look for some specific strings (you read more about this in the
 
 The built-in strings to be replaced are:
 
-* `{{ HM_DATA_DIR }}`
-* `{{ HM_CACHE_DIR }}`
-* `{{ HM_REPO_DIR }}`
+* `{{ HM_DATA_DIR }}` - The app's data that you want to persist. Will be stored in the
+  `data/` directory, under the main Harbormaster working directory.
+* `{{ HM_CACHE_DIR }}` - Any data you don't want to keep. Will be stored in the `cache/`
+  directory, under the main Harbormaster working directory.
+* `{{ HM_REPO_DIR }}` - The app's repository. Use this if you want to mount the app's
+  directory itself, for example to access some code that you don't want to copy into the
+  container.
 
 They will be replaced with the proper directory names (without trailing
 slashes), so the `volumes` section of your Compose file in your repository
