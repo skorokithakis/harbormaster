@@ -627,7 +627,6 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
 
             successes.append(True)
         except Exception as e:
-            raise
             click.echo(f"{app.id}: Error while processing: {e}")
             successes.append(False)
         click.echo("")
