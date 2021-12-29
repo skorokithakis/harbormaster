@@ -8,6 +8,7 @@ from typing import Set
 from typing import Tuple
 from unittest.mock import patch
 
+import click
 import git
 from click.testing import CliRunner
 
@@ -64,10 +65,10 @@ def _patched_run():
 
     commands = []
 
-    def inner(command, chdir, environment=None):
+    def inner(command, chdir, environment=None, **kwargs):
         if "docker-compose" in command:
             commands.append(" ".join(command))
-            return 0, b"", b""
+            return 0, b""
         else:
             return rcf(command, chdir, environment=environment)
 
@@ -96,12 +97,14 @@ def run_harbormaster(
             result = runner.invoke(
                 cli.cli,
                 [
+                    "--debug",
+                    "run",
                     "--config",
                     f"{repos['config'].path}/harbormaster.yml",
-                    "--debug",
                     "--working-dir",
                     str(mkdir(tmp_path / "working_dir")),
                 ],
             )
+            click.echo(result.stdout)
     output["commands"] = commands
     return result, output

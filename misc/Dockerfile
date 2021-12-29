@@ -5,7 +5,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt-get update && apt-get install -y python3-pip docker.io cron
 
-RUN pip install poetry
+RUN pip install -U pip poetry
 RUN poetry config virtualenvs.create false
 RUN mkdir /root/.ssh/
 RUN /bin/echo -e "Host *\n\tStrictHostKeyChecking no\n\tIdentityFile /config/ssh_private_key\n" > ~/.ssh/config

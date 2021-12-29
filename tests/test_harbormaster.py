@@ -12,6 +12,8 @@ from docker_harbormaster import cli
 cli.RETRY_WAIT_SECONDS = 0
 cli.MAX_GIT_NETWORK_ATTEMPTS = 1
 
+cli.DEBUG = True
+
 
 @pytest.fixture()
 def repos(tmp_path):
@@ -84,7 +86,7 @@ def test_one_app(tmp_path: Path, repos: Dict[str, Repository]):
     assert output["commands"] == [
         "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker-compose -f docker-compose.yml pull",
-        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build -d",
+        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build --detach",
     ]
 
 
@@ -110,7 +112,7 @@ def test_env_changes(tmp_path: Path, repos: Dict[str, Repository]):
     assert output["commands"] == [
         "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker-compose -f docker-compose.yml pull",
-        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build -d",
+        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build --detach",
     ]
 
     repos["config"].add_files(
@@ -134,7 +136,7 @@ def test_env_changes(tmp_path: Path, repos: Dict[str, Repository]):
     assert output["commands"] == [
         "/usr/bin/env docker-compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker-compose -f docker-compose.yml pull",
-        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build -d",
+        "/usr/bin/env docker-compose -f docker-compose.yml up --remove-orphans --build --detach",
     ]
 
     result, output = run_harbormaster(tmp_path, repos)

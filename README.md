@@ -151,7 +151,7 @@ apps:
     url: https://gitlab.com/otheruser/otherrepo.git
 ```
 
-Then, just run Harbormaster in the same directory as that configuration file.
+Then, just execute `harbormaster run` in the same directory as that configuration file.
 Harbormaster will parse the file, automatically download the repositories
 mentioned in it (and keep them up to date).
 
@@ -163,20 +163,31 @@ you can easily back up the entire data directory in one go.
 `container_name` directive, otherwise Harbormaster might not always be able to
 terminate your apps when necessary.
 
-Also, keep in mind that, due to current limitations, some changes to the
-Harbormaster config directives won't take effect/cause app restarts until *the
-repos of the apps themselves* change.
-
 If you want to trigger Harbormaster via a webhook (perhaps whenever the config file
 repository changes), you can use [Captain
 Webhook](https://captain-webhook.readthedocs.io/).
 
 
+## Testing
+
+When developing Harbormaster-compatible Compose files for our app, you usually need to
+test them.  The naive way requires you to write a Harbormaster configuration file,
+create a repository for your app, commit the app's Compose file in it, and run
+Harbormaster with the configuration file to test.
+
+To make this easier, Harbormaster includes the `harbormaster test` command, which will
+create a temporary directory for the data/cache/etc directories, and run the Compose
+files directly from your repository, without committing or writing a Harbormaster
+configuration file.
+
+Run `harbormaster test --help` to see the available options.
+
+
 ## Recommended deployment
 
-**Note:** The Harbormaster Docker image is still relatively new, but it's a very
-convenient way to deploy Harbormaster without installing anything. That may become the
-recommended way to deploy Harbormaster in the future.
+**Note:** The Harbormaster Docker image mentioned in "Docker installation" is still
+relatively new, but it's a very convenient way to deploy Harbormaster without installing
+anything. That may become the recommended way to deploy Harbormaster in the future.
 
 The recommended way to run Harbormaster is on a timer. You can use systemd, with two
 files. Put the Harbormaster configuration YAML in a repository, and clone it somewhere.
@@ -190,7 +201,7 @@ Description=Run the Harbormaster updater
 Wants=harbormaster.timer
 
 [Service]
-ExecStart=/usr/local/bin/harbormaster
+ExecStart=/usr/local/bin/harbormaster run
 ExecStartPre=/usr/bin/git pull
 WorkingDirectory=<the repository directory>
 

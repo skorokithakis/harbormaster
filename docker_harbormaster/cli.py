@@ -5,8 +5,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from time import strftime
@@ -15,28 +17,31 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Union
 
 import attr
 import click
 import yaml
+from click_help_colors import HelpColorsGroup
+
+from .utils import AppPaths
+from .utils import DATA_DIR_NAME
+from .utils import options_to_dict
+from .utils import Paths
 
 
 DEBUG: bool = False
-
-ARCHIVES_DIR_NAME = "archives"
-REPOS_DIR_NAME = "repos"
-CACHES_DIR_NAME = "caches"
-DATA_DIR_NAME = "data"
-
-CACHE_FILE_NAME = ".harbormaster.cache"
 
 MAX_GIT_NETWORK_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 10
 
 
-def debug(message: Any) -> None:
+def debug(message: str, force: bool = False) -> None:
     """Print a message if DEBUG is True."""
-    if DEBUG:
+    if DEBUG or force:
+        # If there already is a newline, strip it.
+        if message.endswith("\n"):
+            message = message[:-1]
         click.echo(message)
 
 
@@ -156,8 +161,11 @@ def _kill_orphan_containers(repo_id: str):
 
 
 def _run_command_full(
-    command: List[str], chdir: Path, environment: Dict[str, str] = None
-) -> Tuple[int, bytes, bytes]:
+    command: List[Union[str, Path]],
+    chdir: Path,
+    environment: Dict[str, str] = None,
+    print_output: bool = False,
+) -> Tuple[int, bytes]:
     """Run a command and return its exit code, stdout, and stderr."""
     # Include the environment in our command.
     env = os.environ.copy()
@@ -168,55 +176,32 @@ def _run_command_full(
     os.chdir(chdir)
     debug("Command: " + " ".join([str(x) for x in command]))
     process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, shell=False
     )
-    stdout, stderr = process.communicate()
-    debug(f"Return code: {process.returncode}")
-    debug(stdout)
-    debug(stderr)
+
+    stdout_list: List[bytes] = []
+    if process.stdout:
+        try:
+            for line in process.stdout:
+                stdout_list.append(line)
+                debug(line.decode(), force=print_output)
+        except KeyboardInterrupt as e:
+            os.kill(process.pid, signal.SIGINT)
+            process.wait()
+            raise e
+
+    returncode = process.wait()
+    stdout = b"".join(stdout_list)
+    debug(f"Return code: {returncode}")
     os.chdir(wd)
-    return (process.returncode, stdout, stderr)
+    return (returncode, stdout)
 
 
 def _run_command(
-    command: List[str], chdir: Path, environment: Dict[str, str] = None
+    command: List[Union[Path, str]], chdir: Path, environment: Dict[str, str] = None
 ) -> int:
     """Run a command and return its exit code."""
     return _run_command_full(command, chdir, environment=environment)[0]
-
-
-@attr.s(auto_attribs=True)
-class Paths:
-    """The relevant working paths for this specific configuration run."""
-
-    workdir: Path
-    archives_dir: Path
-    repos_dir: Path
-    caches_dir: Path
-    data_dir: Path
-    cache_file: Path
-
-    def create_directories(self):
-        """Create all the necessary directories."""
-        for directory in (
-            self.archives_dir,
-            self.repos_dir,
-            self.caches_dir,
-            self.data_dir,
-        ):
-            directory.mkdir(exist_ok=True)
-
-    @classmethod
-    def for_workdir(cls, workdir: Path):
-        """Derive the working paths from a base workdir path."""
-        return cls(
-            workdir=workdir,
-            data_dir=workdir / DATA_DIR_NAME,
-            archives_dir=workdir / ARCHIVES_DIR_NAME,
-            repos_dir=workdir / REPOS_DIR_NAME,
-            caches_dir=workdir / CACHES_DIR_NAME,
-            cache_file=workdir / CACHE_FILE_NAME,
-        )
 
 
 class App:
@@ -224,10 +209,17 @@ class App:
         self,
         id: str,
         configuration: Dict[str, Any],
-        config_filename: Path,
-        paths: Paths,
+        paths: AppPaths,
         cache=Dict[str, str],
     ):
+        """
+        Instantiate an app.
+
+        id - The app's ID, used to name its directories.
+        configuration - The app's stanza from the configuration file.
+        paths - A Paths instance containing all the relevant app-independent paths.
+        cache - The app's cache.
+        """
         self.id: str = id
         self.enabled: bool = configuration.get("enabled", True)
         self.url: str = configuration["url"]
@@ -242,7 +234,7 @@ class App:
 
         self.environment: Dict[str, str] = _read_var_file(
             filename=configuration.get("environment_file"),
-            base_dir=config_filename.parent,
+            base_dir=paths.workdir,
             app_id=self.id,
         )
         self.environment.update(
@@ -254,7 +246,7 @@ class App:
 
         self.replacements: Dict[str, str] = _read_var_file(
             filename=configuration.get("replacements_file", {}),
-            base_dir=config_filename.parent,
+            base_dir=paths.workdir,
             app_id=self.id,
         )
         self.replacements.update(
@@ -308,14 +300,9 @@ class App:
         return commands
 
     @property
-    def dir(self):
-        """Return the app repo directory path."""
-        return self.paths.repos_dir / self.id
-
-    @property
     def repo_dir_exists(self) -> bool:
         """Return whether a repository directory exists for this app."""
-        return self.dir.exists()
+        return self.paths.repo_dir.exists()
 
     def _render_config_vars(self):
         """
@@ -331,22 +318,21 @@ class App:
         # ask it to mount the `data` volume into `/main/data/someapp`.
         # We work around that with a hack here by looking for an environment variable
         # with the path to mount on the host.
-
         data_env_var = os.environ.get("HARBORMASTER_HOST_DATA")
         data_dir = (
-            (Path(data_env_var) / DATA_DIR_NAME)
+            (Path(data_env_var) / DATA_DIR_NAME / self.id)
             if data_env_var
             else self.paths.data_dir
         )
 
         for cfn in self.compose_config:
-            with (self.dir / cfn).open("r+") as cfile:
+            with (self.paths.repo_dir / cfn).open("r+") as cfile:
                 contents = cfile.read()
 
                 replacements = {
-                    "DATA_DIR": str(data_dir / self.id),
-                    "CACHE_DIR": str(self.paths.caches_dir / self.id),
-                    "REPO_DIR": str(self.paths.repos_dir / self.id),
+                    "DATA_DIR": str(data_dir),
+                    "CACHE_DIR": str(self.paths.cache_dir),
+                    "REPO_DIR": str(self.paths.repo_dir),
                 }
                 replacements.update(self.replacements)
                 contents = _render_template(contents, replacements)
@@ -357,12 +343,13 @@ class App:
 
     def is_repo(self) -> bool:
         """Check whether a repository exists and is actually a repository."""
-        if not self.dir.exists():
+        if not self.paths.repo_dir.exists():
             return False
 
         return (
             _run_command(
-                ["/usr/bin/env", "git", "rev-parse", "--show-toplevel"], self.dir
+                ["/usr/bin/env", "git", "rev-parse", "--show-toplevel"],
+                self.paths.repo_dir,
             )
             == 0
         )
@@ -379,7 +366,7 @@ class App:
                 "--filter",
                 "status=running",
             ],
-            self.dir,
+            self.paths.repo_dir,
         )[1].strip()
 
         if stdout:
@@ -389,41 +376,45 @@ class App:
         # If `docker ps` returned nothing, nothing is running.
         return bool(stdout)
 
-    def start(self):
+    def start(self, detach=True):
         """Start the Docker containers for this app."""
-        status, stdout, stderr = _run_command_full(
+        status, stdout = _run_command_full(
             [
                 "/usr/bin/env",
                 "docker-compose",
                 *self.compose_config_command,
                 "pull",
             ],
-            self.dir,
+            self.paths.repo_dir,
             environment=self.environment,
         )
 
         if status != 0:
             raise Exception(
-                f"Could not pull the docker-compose image:\n{stderr.decode()}"
+                f"Could not pull the docker-compose image:\n{stdout.decode()}"
             )
 
-        status, stdout, stderr = _run_command_full(
-            [
-                "/usr/bin/env",
-                "docker-compose",
-                *self.compose_config_command,
-                "up",
-                "--remove-orphans",
-                "--build",
-                "-d",
-            ],
-            self.dir,
+        command = [
+            "/usr/bin/env",
+            "docker-compose",
+            *self.compose_config_command,
+            "up",
+            "--remove-orphans",
+            "--build",
+        ]
+        if detach:
+            command.append("--detach")
+
+        status, stdout = _run_command_full(
+            command,
+            self.paths.repo_dir,
             environment=self.environment,
+            print_output=not detach,
         )
 
         if status != 0:
             raise Exception(
-                f"Could not start the docker-compose container:\n{stderr.decode()}"
+                f"Could not start the docker-compose container:\n{stdout.decode()}"
             )
 
     def stop(self):
@@ -440,7 +431,7 @@ class App:
                     "down",
                     "--remove-orphans",
                 ],
-                self.dir,
+                self.paths.repo_dir,
             )
             != 0
         ):
@@ -454,7 +445,15 @@ class App:
         """
         if (
             _run_command(
-                ["/usr/bin/env", "git", "clone", "-b", self.branch, self.url, self.dir],
+                [
+                    "/usr/bin/env",
+                    "git",
+                    "clone",
+                    "-b",
+                    self.branch,
+                    self.url,
+                    self.paths.repo_dir,
+                ],
                 self.paths.workdir,
             )
             != 0
@@ -489,7 +488,9 @@ class App:
     def get_current_hash(self) -> str:
         """Return the git repository's current commit SHA."""
         return (
-            _run_command_full(["/usr/bin/env", "git", "rev-parse", "HEAD"], self.dir)[1]
+            _run_command_full(
+                ["/usr/bin/env", "git", "rev-parse", "HEAD"], self.paths.repo_dir
+            )[1]
             .decode()
             .strip()
         )
@@ -506,7 +507,7 @@ class App:
         if (
             _run_command(
                 ["/usr/bin/env", "git", "remote", "set-url", "origin", self.url],
-                self.dir,
+                self.paths.repo_dir,
             )
             != 0
         ):
@@ -515,7 +516,7 @@ class App:
         if (
             _run_command(
                 ["/usr/bin/env", "git", "fetch", "--force", "origin", self.branch],
-                self.dir,
+                self.paths.repo_dir,
             )
             != 0
         ):
@@ -524,7 +525,7 @@ class App:
         if (
             _run_command(
                 ["/usr/bin/env", "git", "reset", "--hard", f"origin/{self.branch}"],
-                self.dir,
+                self.paths.repo_dir,
             )
             != 0
         ):
@@ -532,25 +533,24 @@ class App:
 
     def clone_or_pull(self) -> bool:
         """Pull a repository, or clone it if it hasn't been initialized yet."""
-        for i in range(MAX_GIT_NETWORK_ATTEMPTS):
+        for _ in range(MAX_GIT_NETWORK_ATTEMPTS):
             try:
                 if self.is_repo():
-                    click.echo(f"Pulling {self.url} to {self.dir}...")
+                    click.echo(f"Pulling {self.url} to {self.paths.repo_dir}...")
                     updated = self.pull()
                 else:
-                    click.echo(f"Cloning {self.url} to {self.dir}...")
+                    click.echo(f"Cloning {self.url} to {self.paths.repo_dir}...")
                     updated = self.clone()
 
                 self._render_config_vars()
                 return updated
             except Exception as e:
                 last_exception = e
-                if i < MAX_GIT_NETWORK_ATTEMPTS - 1:
-                    click.echo(f"Error with git clone/pull request: {e}")
-                    click.echo(f"Will retry after {RETRY_WAIT_SECONDS} seconds.")
-                    time.sleep(RETRY_WAIT_SECONDS)
-        else:
-            raise last_exception
+
+            click.echo(f"Error with git clone/pull request: {last_exception}")
+            click.echo(f"Will retry after {RETRY_WAIT_SECONDS} seconds.")
+            time.sleep(RETRY_WAIT_SECONDS)
+        raise last_exception
 
 
 @attr.s(auto_attribs=True)
@@ -560,7 +560,7 @@ class Configuration:
     apps: List[App] = []
 
     @classmethod
-    def from_yaml(cls, config: str, paths: Paths) -> "Configuration":
+    def from_yaml(cls, config: Path, paths: Paths) -> "Configuration":
         # Read the cache from the cache file.
         cache = {}
         try:
@@ -576,20 +576,24 @@ class Configuration:
             paths=paths,
             apps=[
                 App(
-                    id=repo_id,
-                    configuration=repo_config,
-                    config_filename=Path(config),
-                    paths=paths,
-                    cache=cache.get(repo_id, {}),
+                    id=app_id,
+                    configuration=app_config,
+                    paths=AppPaths.from_paths(paths, app_id),
+                    cache=cache.get(app_id, {}),
                 )
-                for repo_id, repo_config in configuration["apps"].items()
+                for app_id, app_config in configuration["apps"].items()
             ],
         )
         return instance
 
 
 def process_config(configuration: Configuration, force_restart: bool = False) -> bool:
-    """Process a given configuration file."""
+    """
+    Process a given configuration file.
+
+    This is the main function that loads the configuration the file and starts/stops
+    apps as needed.
+    """
     successes = []
     cache = {"version": 1}
     for app in configuration.apps:
@@ -658,9 +662,7 @@ def archive_stale_data(repos: List[App], paths: Paths):
         path = paths.data_dir / stale_data
         click.echo(f"The data for {stale_data} is stale, archiving {path}...")
         path.rename(
-            paths.workdir
-            / ARCHIVES_DIR_NAME
-            / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
+            paths.archives_dir / f"{stale_data}-{strftime('%Y-%m-%d_%H-%M-%S')}"
         )
 
     for stale_caches in current_caches - app_names:
@@ -669,12 +671,25 @@ def archive_stale_data(repos: List[App], paths: Paths):
         shutil.rmtree(path)
 
 
-@click.command()
+@click.group(cls=HelpColorsGroup, help_headers_color="blue", help_options_color="green")
+@click.option("--debug", is_flag=True, help="Print debug information.")
+def cli(debug: bool):
+    global DEBUG
+    DEBUG = debug
+
+
+@cli.command()
 @click.option(
     "-c",
     "--config",
     default="harbormaster.yml",
-    type=click.Path(exists=True, dir_okay=False, readable=True, resolve_path=True),
+    type=click.Path(
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
     help="The configuration file to use.",
 )
 @click.option(
@@ -687,6 +702,7 @@ def archive_stale_data(repos: List[App], paths: Paths):
         readable=True,
         writable=True,
         resolve_path=True,
+        path_type=Path,
     ),
     help="The root directory to work in.",
 )
@@ -696,13 +712,9 @@ def archive_stale_data(repos: List[App], paths: Paths):
     is_flag=True,
     help="Restart all apps even if their repositories have not changed.",
 )
-@click.option("--debug", is_flag=True, help="Print debug information.")
 @click.version_option()
-def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
-    global DEBUG
-    DEBUG = debug
-
-    workdir = Path(working_dir)
+def run(config: Path, working_dir: Path, force_restart: bool):
+    workdir = working_dir
     paths = Paths.for_workdir(workdir)
     paths.create_directories()
 
@@ -728,6 +740,145 @@ def cli(config: str, working_dir: str, force_restart: bool, debug: bool):
             workdir,
         )
     sys.exit(0 if success else 1)
+
+
+@cli.command()
+@click.option(
+    "-d",
+    "--working-dir",
+    default=tempfile.mkdtemp(prefix="hm_"),
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        readable=True,
+        writable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
+    help="The root directory to work in.",
+)
+@click.option(
+    "-e",
+    "--environment",
+    multiple=True,
+    help="An environment variable (can be used multiple times).",
+)
+@click.option(
+    "-v",
+    "--environment-file",
+    type=click.Path(
+        exists=True,
+        file_okay=True,
+        readable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
+    help="The environment file to use (use multip.",
+)
+@click.option(
+    "-r",
+    "--replacement",
+    multiple=True,
+    help="A replacement variable (can be used multiple times).",
+)
+@click.option(
+    "-p",
+    "--replacements-file",
+    type=click.Path(
+        exists=True,
+        file_okay=True,
+        readable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
+    help="The replacements file to use.",
+)
+@click.option(
+    "-c",
+    "--compose-file",
+    type=click.Path(
+        exists=True,
+        file_okay=True,
+        readable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
+    multiple=True,
+    help="The Compose file to use (can be used multiple times).",
+)
+def test(
+    working_dir: Path,
+    environment: Tuple[str],
+    environment_file: Path,
+    replacement: Tuple[str],
+    replacements_file: Path,
+    compose_file: Tuple[Path],
+):
+    click.echo(f"Starting app in test mode in {working_dir}...")
+    app_id = "test_app"
+    paths = Paths.for_workdir(working_dir)
+    paths.create_directories()
+    app_paths = AppPaths.from_paths(paths, app_id)
+    app_paths.repo_dir = Path(".").absolute()
+
+    repo_config = {
+        "enabled": True,
+        "url": "https://your.git/repo/url/here",
+        "branch": "master",
+        "environment_file": environment_file,
+        "replacements_file": replacements_file,
+    }
+    if environment:
+        repo_config["environment"] = options_to_dict(environment)
+    if replacement:
+        repo_config["replacements"] = options_to_dict(replacement)
+
+    if not compose_file:
+        compose_file = (Path("docker-compose.yml").absolute(),)
+
+    # Copy the Compose config files to the working directory and render them.
+    config_list = []
+    for path in compose_file:
+        destination = (app_paths.repo_dir / f".{path.name}.hmtemp").absolute()
+        shutil.copy(path, destination)
+        config_list.append(destination)
+    repo_config["compose_config"] = config_list
+
+    app = App(
+        id=app_id,
+        configuration=repo_config,
+        paths=app_paths,
+        cache={},
+    )
+    app._render_config_vars()
+    try:
+        app.start(detach=False)
+    except KeyboardInterrupt:
+        click.echo("Interrupted container.")
+
+    # Clean up.
+    for file in repo_config["compose_config"]:  # type: ignore
+        file.unlink()
+
+    # Beautify the config.
+    repo_config.pop("environment_file")
+    if environment_file:
+        repo_config["environment_file"] = f"some_dir/{environment_file.name}"
+
+    repo_config.pop("replacements_file")
+    if replacements_file:
+        repo_config["replacements_file"] = f"some_dir/{replacements_file.name}"
+
+    repo_config["compose_config"] = [path.name for path in compose_file]
+
+    # Show it.
+    click.secho(
+        "\U00002714\U0000FE0F Run finished.\n\n"
+        "If everything went well, you can use this stanza in your Harbormaster "
+        "config file:\n",
+        fg="green",
+    )
+    click.echo(yaml.dump({"apps": {"myapp": repo_config}}))
 
 
 if __name__ == "__main__":

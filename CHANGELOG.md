@@ -3,7 +3,13 @@
 
 ## Unreleased
 
+### Features
+
+* Implement test mode. [Stavros Korokithakis]
+
 ### Fixes
+
+* Remove what looks like leftover debugging code but whose importance nobody can be sure of. [Stavros Korokithakis]
 
 * Improve compatibility with earlier Docker versions. [Stavros Korokithakis]
 
