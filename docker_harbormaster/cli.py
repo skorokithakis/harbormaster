@@ -755,7 +755,10 @@ def run(config: Path, working_dir: Path, force_restart: bool):
         resolve_path=True,
         path_type=Path,
     ),
-    help="The root directory to work in.",
+    help=(
+        "The root directory to work in (if not specified, a temporary directory will "
+        "be created."
+    ),
 )
 @click.option(
     "-e",
@@ -773,7 +776,7 @@ def run(config: Path, working_dir: Path, force_restart: bool):
         resolve_path=True,
         path_type=Path,
     ),
-    help="The environment file to use (use multip.",
+    help="The environment file to use.",
 )
 @click.option(
     "-r",
