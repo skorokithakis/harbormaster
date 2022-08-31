@@ -12,7 +12,7 @@ readme = "README.md"
 harbormaster = "docker_harbormaster.cli:cli"
 
 [tool.poetry.dependencies]
-python = ">=3.6"
+python = ">=3.6,<4"
 PyYAML = ">=5.4.1"
 click = ">=7.1.2"
 docker-compose = ">=1.29.1"
