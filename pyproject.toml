@@ -21,7 +21,7 @@ click-help-colors = ">=0.9.1"
 
 [tool.poetry.dev-dependencies]
 pytest = ">=5.2"
-gitchangelog = {url = "https://github.com/sarnold/gitchangelog/archive/refs/heads/master.zip"}
+gitchangelog = {url = "https://github.com/sarnold/gitchangelog/releases/download/3.1.1/gitchangelog-3.1.1-py3-none-any.whl"}
 GitPython = ">=3.1.18"
 
 [build-system]
