@@ -37,7 +37,7 @@ build linux:
     - pwd
     - mv * /src/
     - cd /src
-    - pip3 install poetry
+    - pip3 install -U poetry pip
     - poetry config virtualenvs.create false
     - poetry export --without-hashes -o requirements.txt
     - /entrypoint.sh
