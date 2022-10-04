@@ -8,4 +8,4 @@ source /root/project_env.sh || true
 
 cd /config/
 /usr/bin/git pull
-/usr/local/bin/harbormaster -d /main -c /config/harbormaster.yml
+/usr/local/bin/harbormaster run -d /main -c /config/harbormaster.yml

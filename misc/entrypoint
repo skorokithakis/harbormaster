@@ -5,12 +5,12 @@ set -euo pipefail
 # This script is the entrypoint for the container Harbormaster itself is deployed in.
 #
 # Because Harbormaster starts other Docker apps with Compose, it specifies some paths to
-# Mount the apps' data on. However, because of the way Docker works, those paths are
-# Actually *on the host*, and not inside this container.
+# mount the apps' data on. However, because of the way Docker works, those paths are
+# actually *on the host*, and not inside this container.
 #
 # That means that Harbormaster must know the path on the host that it's mounted in, so it
-# Can pass it on to the apps it manages. The way we do that is by using `docker inspect`
-# To inspect our own running container and see what we were run with.
+# can pass it on to the apps it manages. The way we do that is by using `docker inspect`
+# to inspect our own running container and see what we were run with.
 #
 # It's a lot of hackery, but that just mirrors life.
 

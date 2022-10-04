@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/ambv/black
-  rev: 22.6.0
+  rev: 22.8.0
   hooks:
   - id: black
     name: Reformat files
@@ -20,7 +20,7 @@ repos:
     types: [python]
     stages: [manual]
 - repo: https://github.com/asottile/reorder_python_imports
-  rev: v3.1.0
+  rev: v3.8.3
   hooks:
   - id: reorder-python-imports
     name: Reorder imports
@@ -32,7 +32,7 @@ repos:
     args: ["--ignore=E501,W503"]
     language_version: python3
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.961
+  rev: v0.981
   hooks:
   - id: mypy
     name: Run type checks

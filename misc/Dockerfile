@@ -30,5 +30,6 @@ COPY . /hm-src/
 RUN pip install /hm-src/
 
 WORKDIR /config
+RUN git config --global --add safe.directory /config
 
 CMD ["/usr/bin/entrypoint"]
