@@ -7,5 +7,5 @@ set -euox pipefail
 source /root/project_env.sh || true
 
 cd /config/
-/usr/bin/git pull
+/usr/bin/git pull || true
 /usr/local/bin/harbormaster run -d /main -c /config/harbormaster.yml

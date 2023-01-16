@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
 # This script is the entrypoint for the container Harbormaster itself is deployed in.
@@ -32,4 +31,4 @@ fi
 # it actually runs anything, which is bad UX.
 run-harbormaster
 
-cron -f
+crond -f -l 1

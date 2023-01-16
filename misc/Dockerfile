@@ -1,35 +1,21 @@
-FROM ubuntu:20.04
+FROM python:3-alpine
 
-ENV TZ=Etc/UTC
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN apk add bash docker-cli dumb-init git openssh && \
+    mkdir /main /config && \
+    git config --global --add safe.directory /config
 
-RUN apt-get update && apt-get install -y python3-pip docker.io cron
+COPY docker_harbormaster /src/docker_harbormaster
+# Required for pip to install the package.
+COPY pyproject.toml README.md /src/
 
-RUN pip install -U pip poetry
-RUN poetry config virtualenvs.create false
-RUN mkdir /root/.ssh/
-RUN /bin/echo -e "Host *\n\tStrictHostKeyChecking no\n\tIdentityFile /config/ssh_private_key\n" > ~/.ssh/config
+RUN pip install /src
 
-
-RUN mkdir /config /main /hm-src
+COPY misc/ssh_config /etc/ssh/ssh_config
+COPY misc/crontab /var/spool/cron/crontabs/root
+COPY misc/run-harbormaster misc/entrypoint /usr/bin/
 
 VOLUME /main
 VOLUME /config
 
-# Add the crontab.
-COPY misc/crontab /etc/cron.d/harbormaster
-RUN chmod 0644 /etc/cron.d/harbormaster && \
-    crontab /etc/cron.d/harbormaster
-
-COPY misc/run-harbormaster /usr/bin/
-COPY misc/entrypoint /usr/bin/
-
-COPY . /hm-src/
-
-# Install Harbormaster.
-RUN pip install /hm-src/
-
-WORKDIR /config
-RUN git config --global --add safe.directory /config
-
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["/usr/bin/entrypoint"]
