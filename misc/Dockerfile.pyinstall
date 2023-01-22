@@ -1,0 +1,12 @@
+FROM python:3-slim
+
+RUN apt-get update && \
+    apt-get -y install binutils && \
+    pip install poetry pyinstaller && \
+    apt-get clean
+
+COPY misc/build-binary.sh /entrypoint
+
+WORKDIR /workdir
+
+ENTRYPOINT ["/entrypoint"]

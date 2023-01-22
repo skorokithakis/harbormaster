@@ -5,6 +5,9 @@ stages:
   - build
   - release
 
+variables:
+  PYINSTALLER_IMAGE_NAME: "$CI_REGISTRY_IMAGE/pyinstaller:latest"
+
 test:
   variables:
     PRE_COMMIT_HOME: "$CI_PROJECT_DIR/.cache/pre-commit"
@@ -26,26 +29,31 @@ test:
     - pre-commit run -a --hook-stage manual
     - pytest
 
-build linux:
+build image for linux build:
   stage: build
-  variables:
-    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.pyenv/shims/"
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - docker build -f misc/Dockerfile.pyinstall -t "$PYINSTALLER_IMAGE_NAME" .
+    - docker push "$PYINSTALLER_IMAGE_NAME"
+  rules:
+    - changes:
+      - misc/build-binary.sh
+      - misc/Dockerfile.pyinstall
+
+build linux:
+  stage: release
   image:
-    name: cdrx/pyinstaller-linux
+    name: "$PYINSTALLER_IMAGE_NAME"
     entrypoint: [""]
   script:
-    - pwd
-    - mv * /src/
-    - cd /src
-    - pip install -U pip
-    - pip install poetry
-    - poetry config virtualenvs.create false
-    - poetry export --without-hashes -o requirements.txt
-    - /entrypoint.sh
-    - mv "dist/linux/harbormaster" "${CI_PROJECT_DIR}"
+    - misc/build-binary.sh
   artifacts:
     paths:
-      - harbormaster
+      - dist/linux/harbormaster
 
 release pypi:
   variables:
