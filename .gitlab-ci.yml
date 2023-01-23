@@ -77,6 +77,6 @@ release docker:
   services:
     - docker:dind
   before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" docker.io
+    - docker login -u "$DOCKERIO_REGISTRY_USER" -p "$DOCKERIO_REGISTRY_PASSWORD" docker.io
   script:
     - ./misc/docker-build.sh --push
