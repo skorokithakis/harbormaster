@@ -17,24 +17,6 @@ CACHE_FILE_NAME = ".harbormaster.cache"
 
 
 @attr.s(auto_attribs=True)
-class AppPaths:
-    workdir: Path
-    repo_dir: Path
-    cache_dir: Path
-    data_dir: Path
-
-    @classmethod
-    def from_paths(cls, paths: "Paths", app_id: str) -> "AppPaths":
-        """Create an AppPaths instance for a specific app."""
-        return cls(
-            workdir=paths.workdir,
-            repo_dir=paths.repos_dir / app_id,
-            cache_dir=paths.caches_dir / app_id,
-            data_dir=paths.data_dir / app_id,
-        )
-
-
-@attr.s(auto_attribs=True)
 class Paths:
     """
     The relevant working paths for this specific configuration run.
@@ -44,6 +26,8 @@ class Paths:
     """
 
     workdir: Path
+    # The directory the configuration file is located in.
+    config_dir: Path
     archives_dir: Path
     repos_dir: Path
     caches_dir: Path
@@ -61,15 +45,36 @@ class Paths:
             directory.mkdir(exist_ok=True)
 
     @classmethod
-    def for_workdir(cls, workdir: Path):
+    def for_workdir(cls, workdir: Path, config_dir: Path):
         """Derive the working paths from a base workdir path."""
         return cls(
             workdir=workdir,
+            config_dir=config_dir,
             data_dir=workdir / DATA_DIR_NAME,
             archives_dir=workdir / ARCHIVES_DIR_NAME,
             repos_dir=workdir / REPOS_DIR_NAME,
             caches_dir=workdir / CACHES_DIR_NAME,
             cache_file=workdir / CACHE_FILE_NAME,
+        )
+
+
+@attr.s(auto_attribs=True)
+class AppPaths:
+    workdir: Path
+    repo_dir: Path
+    cache_dir: Path
+    data_dir: Path
+    config_dir: Path
+
+    @classmethod
+    def from_paths(cls, paths: "Paths", app_id: str) -> "AppPaths":
+        """Create an AppPaths instance for a specific app."""
+        return cls(
+            workdir=paths.workdir,
+            repo_dir=paths.repos_dir / app_id,
+            cache_dir=paths.caches_dir / app_id,
+            data_dir=paths.data_dir / app_id,
+            config_dir=paths.config_dir,
         )
 
 

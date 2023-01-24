@@ -234,7 +234,7 @@ class App:
 
         self.environment: Dict[str, str] = _read_var_file(
             filename=configuration.get("environment_file"),
-            base_dir=paths.workdir,
+            base_dir=paths.config_dir,
             app_id=self.id,
         )
         self.environment.update(
@@ -246,7 +246,7 @@ class App:
 
         self.replacements: Dict[str, str] = _read_var_file(
             filename=configuration.get("replacements_file", {}),
-            base_dir=paths.workdir,
+            base_dir=paths.config_dir,
             app_id=self.id,
         )
         self.replacements.update(
@@ -715,7 +715,7 @@ def cli(debug: bool):
 @click.version_option()
 def run(config: Path, working_dir: Path, force_restart: bool):
     workdir = working_dir
-    paths = Paths.for_workdir(workdir)
+    paths = Paths.for_workdir(workdir, config_dir=config.absolute().parent)
     paths.create_directories()
 
     configuration = Configuration.from_yaml(config, paths)
@@ -819,7 +819,8 @@ def test(
 ):
     click.echo(f"Starting app in test mode in {working_dir}...")
     app_id = "test_app"
-    paths = Paths.for_workdir(working_dir)
+    # We don't have a config dir for this, so just set the root.
+    paths = Paths.for_workdir(working_dir, config_dir=Path("/"))
     paths.create_directories()
     app_paths = AppPaths.from_paths(paths, app_id)
     app_paths.repo_dir = Path(".").absolute()

@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Fix the configuration directory having the wrong relative path base. [Stavros Korokithakis]
+
+
 ## v0.2.1 (2022-06-28)
 
 ### Features
