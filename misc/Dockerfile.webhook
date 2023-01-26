@@ -1,0 +1,4 @@
+FROM stavros/harbormaster:latest
+RUN apk add webhook
+
+COPY misc/hooks.json /hooks.json

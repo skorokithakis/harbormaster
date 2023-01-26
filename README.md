@@ -89,6 +89,11 @@ If you want to run it immediately at some point, you can use the following comma
 $ docker exec -i -t <container id> /usr/bin/run-harbormaster
 ```
 
+Alternatively you can use `stavros/harbormaster:webhook` which ships with
+[webhook](https://github.com/adnanh/webhook) to trigger updates. The image comes with
+an example configuration but you should mount a custom one to `/hooks.json` with proper
+[rules](https://github.com/adnanh/webhook/blob/master/docs/Hook-Rules.md) for verifying
+the source.
 
 ## High-level architecture overview
 
@@ -162,10 +167,6 @@ you can easily back up the entire data directory in one go.
 **WARNING:** Make sure the Compose config in each of the repos does not use the
 `container_name` directive, otherwise Harbormaster might not always be able to
 terminate your apps when necessary.
-
-If you want to trigger Harbormaster via a webhook (perhaps whenever the config file
-repository changes), you can use [Captain
-Webhook](https://captain-webhook.readthedocs.io/).
 
 
 ## Testing

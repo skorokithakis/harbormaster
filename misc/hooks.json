@@ -1,0 +1,7 @@
+[
+  {
+    "id": "run",
+    "execute-command": "/usr/bin/run-harbormaster",
+    "command-working-directory": "/src"
+  }
+]
