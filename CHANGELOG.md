@@ -3,9 +3,13 @@
 
 ## Unreleased
 
+### Features
+
+* Add docker image with webhook support. [Jonas Seydel]
+
 ### Fixes
 
-* Fix the configuration directory having the wrong relative path base. [Stavros Korokithakis]
+* Fix the configuration directory having the wrong relative path base (fixes #12) [Stavros Korokithakis]
 
 
 ## v0.2.1 (2022-06-28)
