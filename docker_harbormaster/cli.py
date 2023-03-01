@@ -569,7 +569,7 @@ class Configuration:
         except Exception as e:
             click.echo(f"Error while reading cache: {e}")
 
-        configuration = yaml.safe_load(open(config))
+        configuration = yaml.safe_load(open(config)) or {}
         cfg = configuration.get("config", {})
         instance = cls(
             prune=cfg.get("prune", False),
@@ -581,7 +581,7 @@ class Configuration:
                     paths=AppPaths.from_paths(paths, app_id),
                     cache=cache.get(app_id, {}),
                 )
-                for app_id, app_config in configuration["apps"].items()
+                for app_id, app_config in configuration.get("apps", {}).items()
             ],
         )
         return instance
