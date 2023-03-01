@@ -673,6 +673,7 @@ def archive_stale_data(repos: List[App], paths: Paths):
 
 @click.group(cls=HelpColorsGroup, help_headers_color="blue", help_options_color="green")
 @click.option("--debug", is_flag=True, help="Print debug information.")
+@click.version_option()
 def cli(debug: bool):
     global DEBUG
     DEBUG = debug
@@ -712,7 +713,6 @@ def cli(debug: bool):
     is_flag=True,
     help="Restart all apps even if their repositories have not changed.",
 )
-@click.version_option()
 def run(config: Path, working_dir: Path, force_restart: bool):
     workdir = working_dir
     paths = Paths.for_workdir(workdir, config_dir=config.absolute().parent)
