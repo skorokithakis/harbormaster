@@ -9,6 +9,8 @@
 
 ### Fixes
 
+* Be more defensive when loading the config. [Stavros Korokithakis]
+
 * Fix the configuration directory having the wrong relative path base (fixes #12) [Stavros Korokithakis]
 
 
