@@ -256,6 +256,10 @@ class App:
             }
         )
 
+        self.configuration_hash = hashlib.sha1(
+            yaml.dump(configuration).encode("utf-8")
+        ).hexdigest()
+
     def check_parameter_changes(self) -> bool:
         """
         Check if the environment/replacements have changed since the last run.
@@ -268,20 +272,30 @@ class App:
         """
         env_hash = _hash_dict(self.environment)
         replacements_hash = _hash_dict(self.replacements)
+        configuration_hash = self.configuration_hash
 
         old_env_hash = self.cache.get("environment_hash", "")
         old_replacements_hash = self.cache.get("replacements_hash", "")
+        old_configuration_hash = self.cache.get("configuration_hash", "")
 
         debug(f"Old env hash: {old_env_hash}\nNew env hash: {env_hash}")
         debug(
             f"Old replacements hash: {old_replacements_hash}"
             f"\nNew replacements hash: {replacements_hash}"
         )
+        debug(
+            f"Old config hash: {old_configuration_hash}\nNew config hash: {configuration_hash}"
+        )
 
         self.cache["environment_hash"] = env_hash
         self.cache["replacements_hash"] = replacements_hash
+        self.cache["configuration_hash"] = configuration_hash
 
-        return env_hash != old_env_hash or replacements_hash != old_replacements_hash
+        return (
+            env_hash != old_env_hash
+            or replacements_hash != old_replacements_hash
+            or configuration_hash != old_configuration_hash
+        )
 
     @property
     def compose_config_command(self) -> List[str]:

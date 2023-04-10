@@ -320,3 +320,66 @@ def test_changing_branches(tmp_path: Path, repos: Dict[str, Repository]):
     assert result.exit_code == 0
     assert result.output
     assert output["restarted_apps"] == {"app1"}
+
+
+def test_changing_any_configs(tmp_path: Path, repos: Dict[str, Repository]):
+    repos["config"].add_files(
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  app1:
+                    url: {repos['apps'].path}
+                """,
+            ),
+        ),
+    )
+
+    result, output = run_harbormaster(tmp_path, repos)
+
+    assert result.exit_code == 0
+    assert result.output
+    assert output["restarted_apps"] == {"app1"}
+
+    # add a commented-out line in harbormaster.yml -> no change
+    repos["config"].add_files(
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  app1:
+                    #enabled: true
+                    url: {repos['apps'].path}
+                """,
+            ),
+        ),
+    )
+
+    result, output = run_harbormaster(tmp_path, repos)
+
+    assert result.exit_code == 0
+    assert result.output
+    assert output["restarted_apps"] == set()
+
+    # add a line in harbormaster.yml -> update then reboot
+    repos["config"].add_files(
+        (
+            (
+                "harbormaster.yml",
+                f"""
+                apps:
+                  app1:
+                    enabled: true
+                    url: {repos['apps'].path}
+                """,
+            ),
+        ),
+    )
+
+    result, output = run_harbormaster(tmp_path, repos)
+
+    assert result.exit_code == 0
+    assert result.output
+    assert output["restarted_apps"] == {"app1"}
