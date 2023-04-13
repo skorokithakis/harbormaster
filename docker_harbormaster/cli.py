@@ -204,6 +204,24 @@ def _run_command(
     return _run_command_full(command, chdir, environment=environment)[0]
 
 
+def _postproc_command_assuming_exitcode0(status, stdout, errmsg: str) -> int:
+    """run_command postprocess to throw an exception of 'errmsg' and 'outout' if status != 0"""
+    if status != 0:
+        raise Exception(f"{errmsg}:\n{stdout.decode()}")
+
+    return status
+
+
+def _run_command_assuming_exitcode_0(
+    command: List[Union[Path, str]],
+    chdir: Path,
+    errmsg: str,
+    environment: Dict[str, str] = None,
+) -> int:
+    status, stdout = _run_command_full(command, chdir, environment=environment)
+    return _postproc_command_assuming_exitcode0(status, stdout, errmsg)
+
+
 class App:
     def __init__(
         self,
@@ -297,6 +315,22 @@ class App:
             or configuration_hash != old_configuration_hash
         )
 
+    def ev_run_command_full(
+        self,
+        command: List[Union[str, Path]],
+        chdir: Path,
+        print_output: bool = False,
+    ) -> Tuple[int, bytes]:
+        return _run_command_full(
+            command, chdir, environment=self.environment, print_output=print_output
+        )
+
+    def ev_run_command_assuming_exitcode_0(
+        self, command: List[Union[Path, str]], chdir: Path, errmsg: str
+    ) -> int:
+        status, stdout = self.ev_run_command_full(command, chdir)
+        return _postproc_command_assuming_exitcode0(status, stdout, errmsg)
+
     @property
     def compose_config_command(self) -> List[str]:
         """
@@ -370,7 +404,7 @@ class App:
 
     def is_running(self) -> bool:
         """Check if the app is running."""
-        stdout = _run_command_full(
+        stdout = self.ev_run_command_full(
             [
                 "/usr/bin/env",
                 "docker-compose",
@@ -392,7 +426,7 @@ class App:
 
     def start(self, detach=True):
         """Start the Docker containers for this app."""
-        status, stdout = _run_command_full(
+        status = self.ev_run_command_assuming_exitcode_0(
             [
                 "/usr/bin/env",
                 "docker-compose",
@@ -400,13 +434,8 @@ class App:
                 "pull",
             ],
             self.paths.repo_dir,
-            environment=self.environment,
+            "Could not pull the docker-compose image",
         )
-
-        if status != 0:
-            raise Exception(
-                f"Could not pull the docker-compose image:\n{stdout.decode()}"
-            )
 
         command = [
             "/usr/bin/env",
@@ -419,37 +448,31 @@ class App:
         if detach:
             command.append("--detach")
 
-        status, stdout = _run_command_full(
+        status, stdout = self.ev_run_command_full(
             command,
             self.paths.repo_dir,
-            environment=self.environment,
             print_output=not detach,
         )
-
-        if status != 0:
-            raise Exception(
-                f"Could not start the docker-compose container:\n{stdout.decode()}"
-            )
+        _postproc_command_assuming_exitcode0(
+            status, stdout, "Could not start the docker-compose container"
+        )
 
     def stop(self):
         if not self.is_running():
             # `docker ps` returned nothing, ie nothing is running.
             return
 
-        if (
-            _run_command(
-                [
-                    "/usr/bin/env",
-                    "docker-compose",
-                    *self.compose_config_command,
-                    "down",
-                    "--remove-orphans",
-                ],
-                self.paths.repo_dir,
-            )
-            != 0
-        ):
-            raise Exception("Could not stop the docker-compose container.")
+        self.ev_run_command_assuming_exitcode_0(
+            [
+                "/usr/bin/env",
+                "docker-compose",
+                *self.compose_config_command,
+                "down",
+                "--remove-orphans",
+            ],
+            self.paths.repo_dir,
+            "Could not stop the docker-compose container.",
+        )
 
     def clone(self) -> bool:
         """
@@ -457,22 +480,19 @@ class App:
 
         Returns whether an update was done.
         """
-        if (
-            _run_command(
-                [
-                    "/usr/bin/env",
-                    "git",
-                    "clone",
-                    "-b",
-                    self.branch,
-                    self.url,
-                    self.paths.repo_dir,
-                ],
-                self.paths.workdir,
-            )
-            != 0
-        ):
-            raise Exception("Could not clone repository.")
+        _run_command_assuming_exitcode_0(
+            [
+                "/usr/bin/env",
+                "git",
+                "clone",
+                "-b",
+                self.branch,
+                self.url,
+                self.paths.repo_dir,
+            ],
+            self.paths.workdir,
+            "Could not clone repository.",
+        )
 
         return True
 
@@ -518,32 +538,23 @@ class App:
         local repository looks exactly like the remote and branch that was specified, no
         matter what.
         """
-        if (
-            _run_command(
-                ["/usr/bin/env", "git", "remote", "set-url", "origin", self.url],
-                self.paths.repo_dir,
-            )
-            != 0
-        ):
-            raise Exception("Could not set origin.")
+        _run_command_assuming_exitcode_0(
+            ["/usr/bin/env", "git", "remote", "set-url", "origin", self.url],
+            self.paths.repo_dir,
+            "Could not set origin.",
+        )
 
-        if (
-            _run_command(
-                ["/usr/bin/env", "git", "fetch", "--force", "origin", self.branch],
-                self.paths.repo_dir,
-            )
-            != 0
-        ):
-            raise Exception("Could not fetch from origin.")
+        _run_command_assuming_exitcode_0(
+            ["/usr/bin/env", "git", "fetch", "--force", "origin", self.branch],
+            self.paths.repo_dir,
+            "Could not fetch from origin.",
+        )
 
-        if (
-            _run_command(
-                ["/usr/bin/env", "git", "reset", "--hard", f"origin/{self.branch}"],
-                self.paths.repo_dir,
-            )
-            != 0
-        ):
-            raise Exception("Could not reset local repository to the origin.")
+        _run_command_assuming_exitcode_0(
+            ["/usr/bin/env", "git", "reset", "--hard", f"origin/{self.branch}"],
+            self.paths.repo_dir,
+            "Could not reset local repository to the origin.",
+        )
 
     def clone_or_pull(self) -> bool:
         """Pull a repository, or clone it if it hasn't been initialized yet."""
