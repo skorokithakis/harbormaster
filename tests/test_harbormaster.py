@@ -28,13 +28,14 @@ def repos(tmp_path):
             (
                 "docker-compose.yml",
                 f"""
-            services:
-              web:
-                image: app
-                random_number: {random.random()}
-                volumes:
-                  - {{ HM_DATA_DIR }}/data:/data
-            """,
+---
+services:
+  web:
+    image: app
+    random_number: {random.random()}
+    volumes:
+      - {{ HM_DATA_DIR }}/data:/data
+""",
             ),
         )
 
@@ -67,10 +68,11 @@ def repos(tmp_path):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  myapp:
-                    url: {repos['apps'].path}
-                """,
+---
+apps:
+  myapp:
+    url: {repos['apps'].path}
+""",
             ),
         ),
     )
@@ -97,10 +99,11 @@ def test_env_changes(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  myapp:
-                    url: {repos['apps'].path}
-                """,
+---
+apps:
+  myapp:
+    url: {repos['apps'].path}
+""",
             ),
         ),
     )
@@ -120,12 +123,13 @@ def test_env_changes(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  myapp:
-                    url: {repos['apps'].path}
-                    environment:
-                      foo: bar
-                """,
+---
+apps:
+  myapp:
+    url: {repos['apps'].path}
+    environment:
+      foo: bar
+""",
             ),
         ),
     )
@@ -148,16 +152,17 @@ def test_env_changes(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  myapp:
-                    url: {repos['apps'].path}
-                    environment:
-                      foo: bar
-                      baz: hello
-                  app1:
-                    url: {repos['apps'].path}
-                    branch: app1
-                """,
+---
+apps:
+  myapp:
+    url: {repos['apps'].path}
+    environment:
+      foo: bar
+      baz: hello
+  app1:
+    url: {repos['apps'].path}
+    branch: app1
+""",
             ),
         ),
     )
@@ -171,18 +176,19 @@ def test_env_changes(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  myapp:
-                    url: {repos['apps'].path}
-                    environment:
-                      foo: bar
-                      baz: hello
-                    replacements:
-                      hi: there
-                  app1:
-                    url: {repos['apps'].path}
-                    branch: app1
-                """,
+---
+apps:
+  myapp:
+    url: {repos['apps'].path}
+    environment:
+      foo: bar
+      baz: hello
+    replacements:
+      hi: there
+  app1:
+    url: {repos['apps'].path}
+    branch: app1
+""",
             ),
         ),
     )
@@ -200,14 +206,15 @@ def test_branches(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    url: {repos['apps'].path}
-                    branch: app1
-                  app2:
-                    url: {repos['apps'].path}
-                    branch: app2
-                """,
+---
+apps:
+  app1:
+    url: {repos['apps'].path}
+    branch: app1
+  app2:
+    url: {repos['apps'].path}
+    branch: app2
+""",
             ),
         ),
     )
@@ -237,14 +244,15 @@ def test_changing_remotes(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    url: {repos['apps'].path}
-                    branch: app1
-                  app2:
-                    url: {repos['apps'].path}
-                    branch: app2
-                """,
+---
+apps:
+  app1:
+    url: {repos['apps'].path}
+    branch: app1
+  app2:
+    url: {repos['apps'].path}
+    branch: app2
+""",
             ),
         ),
     )
@@ -261,14 +269,15 @@ def test_changing_remotes(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    url: {repos['apps2'].path}
-                    branch: app1
-                  app2:
-                    url: {repos['apps2'].path}
-                    branch: app2
-                """,
+---
+apps:
+  app1:
+    url: {repos['apps2'].path}
+    branch: app1
+  app2:
+    url: {repos['apps2'].path}
+    branch: app2
+""",
             ),
         ),
     )
@@ -286,10 +295,11 @@ def test_changing_branches(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    url: {repos['apps'].path}
-                """,
+---
+apps:
+  app1:
+    url: {repos['apps'].path}
+""",
             ),
         ),
     )
@@ -306,11 +316,12 @@ def test_changing_branches(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    url: {repos['apps'].path}
-                    branch: app1
-                """,
+---
+apps:
+  app1:
+    url: {repos['apps'].path}
+    branch: app1
+""",
             ),
         ),
     )
@@ -328,10 +339,11 @@ def test_changing_any_configs(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    url: {repos['apps'].path}
-                """,
+---
+apps:
+  app1:
+    url: {repos['apps'].path}
+""",
             ),
         ),
     )
@@ -348,11 +360,12 @@ def test_changing_any_configs(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    #enabled: true
-                    url: {repos['apps'].path}
-                """,
+---
+apps:
+  app1:
+    #enabled: true
+    url: {repos['apps'].path}
+""",
             ),
         ),
     )
@@ -369,11 +382,12 @@ def test_changing_any_configs(tmp_path: Path, repos: Dict[str, Repository]):
             (
                 "harbormaster.yml",
                 f"""
-                apps:
-                  app1:
-                    enabled: true
-                    url: {repos['apps'].path}
-                """,
+---
+apps:
+  app1:
+    enabled: true
+    url: {repos['apps'].path}
+""",
             ),
         ),
     )
