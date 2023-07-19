@@ -133,7 +133,7 @@ def _kill_orphan_containers(repo_id: str):
     """
     Kill all Docker containers for an app.
 
-    Instead of issuing a `docker-compose down`, this method looks for all
+    Instead of issuing a `docker compose down`, this method looks for all
     running containers that start with "{repo_id}_" (that's why it accepts
     a string instead of an App instance).
 
@@ -407,7 +407,8 @@ class App:
         stdout = self.ev_run_command_full(
             [
                 "/usr/bin/env",
-                "docker-compose",
+                "docker",
+                "compose",
                 *self.compose_config_command,
                 "ps",
                 "--services",
@@ -429,17 +430,19 @@ class App:
         status = self.ev_run_command_assuming_exitcode_0(
             [
                 "/usr/bin/env",
-                "docker-compose",
+                "docker",
+                "compose",
                 *self.compose_config_command,
                 "pull",
             ],
             self.paths.repo_dir,
-            "Could not pull the docker-compose image",
+            "Could not pull the Docker image",
         )
 
         command = [
             "/usr/bin/env",
-            "docker-compose",
+            "docker",
+            "compose",
             *self.compose_config_command,
             "up",
             "--remove-orphans",
@@ -454,7 +457,7 @@ class App:
             print_output=not detach,
         )
         _postproc_command_assuming_exitcode0(
-            status, stdout, "Could not start the docker-compose container"
+            status, stdout, "Could not start the Docker container"
         )
 
     def stop(self):
@@ -465,13 +468,14 @@ class App:
         self.ev_run_command_assuming_exitcode_0(
             [
                 "/usr/bin/env",
-                "docker-compose",
+                "docker",
+                "compose",
                 *self.compose_config_command,
                 "down",
                 "--remove-orphans",
             ],
             self.paths.repo_dir,
-            "Could not stop the docker-compose container.",
+            "Could not stop the Docker container.",
         )
 
     def clone(self) -> bool:

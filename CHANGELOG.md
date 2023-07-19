@@ -1,6 +1,15 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Don't restart apps when their configuration hasn't been updated. [葛上昌司]
+
+* Move the --version command to the right place. [Stavros Korokithakis]
+
+
 ## v0.3.0 (2023-03-01)
 
 ### Features
