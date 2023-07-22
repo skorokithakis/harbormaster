@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+### Features
+
+* Add git-crypt to the Docker image. [Stavros Korokithakis]
+
 ### Fixes
 
 * Change Compose filename. [Stavros Korokithakis]
