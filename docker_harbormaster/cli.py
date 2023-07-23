@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -25,7 +26,6 @@ import yaml
 from click_help_colors import HelpColorsGroup
 
 from .utils import AppPaths
-from .utils import DATA_DIR_NAME
 from .utils import options_to_dict
 from .utils import Paths
 
@@ -174,9 +174,31 @@ def _run_command_full(
 
     wd = os.getcwd()
     os.chdir(chdir)
-    debug("Command: " + " ".join([str(x) for x in command]))
+    # We concatenate the command here instead of just passing it to Popen, because the
+    # Harbormaster container (the way to deploy HM) uses a symlink inside with the same
+    # name as the host directory (to make the paths inside the container match up with
+    # the host).
+    #
+    # We do this because otherwise relative volume paths (e.g. `.:/code`) don't work,
+    # as it tries to map the current directory inside the container (e.g. `/main`) to
+    # the outside, where it has a different path (e.g. `/home/foo/hm`), so we create
+    # a symlink called `/home/foo/hm` inside the container, with `/main` as a target.
+    #
+    # In order for Compose to see the current directory as the symlink (ie
+    # `/home/foo/hm`), instead of the absolute path (ie `/main`), we need to use a shell
+    # and cd to the symlink before running Compose.
+    #
+    # I haven't found another way to do this, but if you do, feel free to change it.
+    concatenated_command = f"cd {shlex.quote(str(chdir))}; " + " ".join(
+        [shlex.quote(str(c)) for c in command]
+    )
+    debug(f"Command: {concatenated_command}")
     process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, shell=False
+        concatenated_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        shell=True,
     )
 
     stdout_list: List[bytes] = []
@@ -358,27 +380,12 @@ class App:
 
         This replaces variables like {{ HM_DATA_DIR }} with their value counterparts.
         """
-        # There's a particularity in how the Docker deployment of Harbormaster (ie
-        # running Harbormaster itself in a container) works: Harbormaster inside the
-        # container tries to tell Compose to mount the apps' volumes in its working
-        # directory, but Compose mounts them on the *host* instead. This is because
-        # Compose doesn't know that the caller is in a container, it just sees someone
-        # ask it to mount the `data` volume into `/main/data/someapp`.
-        # We work around that with a hack here by looking for an environment variable
-        # with the path to mount on the host.
-        data_env_var = os.environ.get("HARBORMASTER_HOST_DATA")
-        data_dir = (
-            (Path(data_env_var) / DATA_DIR_NAME / self.id)
-            if data_env_var
-            else self.paths.data_dir
-        )
-
         for cfn in self.compose_config:
             with (self.paths.repo_dir / cfn).open("r+") as cfile:
                 contents = cfile.read()
 
                 replacements = {
-                    "DATA_DIR": str(data_dir),
+                    "DATA_DIR": str(self.paths.data_dir),
                     "CACHE_DIR": str(self.paths.cache_dir),
                     "REPO_DIR": str(self.paths.repo_dir),
                 }
@@ -731,7 +738,6 @@ def cli(debug: bool):
         file_okay=False,
         readable=True,
         writable=True,
-        resolve_path=True,
         path_type=Path,
     ),
     help="The root directory to work in.",

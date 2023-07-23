@@ -18,14 +18,44 @@ set -euo pipefail
 # path. We do this by searching for the mountpoint of type `bind` (not `volume`, as
 # that's what Docker uses when the volume was omitted) and that starts with `/main`.
 MOUNTS=$(docker inspect "$HOSTNAME" -f '{{range .Mounts }}{{ .Type }} {{ .Destination }} {{ .Source }}{{ printf "\n" }}{{ end }}')
-HOST_MOUNT=$(echo "$MOUNTS" | awk '/^bind \/main/ {print $3}')
+MAIN_MOUNT=$(echo "$MOUNTS" | awk '/^bind \/main/ {print $3}')
 
-if [ -n "$HOST_MOUNT" ]; then
-    echo "export HARBORMASTER_HOST_DATA=$HOST_MOUNT" > /root/project_env.sh
+# Do the same for /config
+CONFIG_MOUNT=$(echo "$MOUNTS" | awk '/^bind \/config/ {print $3}')
+
+if [ -n "$MAIN_MOUNT" ]; then
+    echo "export HARBORMASTER_HOST_DATA=$MAIN_MOUNT" > /root/project_env.sh
+    echo "export HARBORMASTER_HOST_CONFIG=$CONFIG_MOUNT" >> /root/project_env.sh
 else
     echo "Harbormaster error: /main volume not mounted properly, cannot continue."
     exit 1
 fi
+
+# Since we need the directories inside the HM container to be the same as the ones
+# outside, the easiest way was to create the same structure as the host and symlink
+# /main there. This way, the inside of the HM container should look to Docker exactly
+# like the outside.
+PARENT_DIR="${MAIN_MOUNT%/*}"
+SUB_DIR="${MAIN_MOUNT##*/}"
+
+# Check if directory exists
+if [ -d "$MAIN_MOUNT" ]; then
+   echo "There was an error, the directory $MAIN_MOUNT already exists in the container."
+   echo "Since Harbormaster does some internal trickery to map the host's directory"
+   echo "structure inside its own container, this means that you can't use a directory"
+   echo "name outside the container that also exists inside."
+   echo ""
+   echo "I'm afraid you've hit a rare limitation, you'll have to move or rename your"
+   echo "Harbormaster data directory to something else on your computer."
+   exit 1
+else
+    # Create parent directories up to one level before
+    mkdir -p "$PARENT_DIR"
+
+    # Echo remaining directory
+    ln -s /main "$PARENT_DIR"/"$SUB_DIR"
+fi
+
 
 # Run Harbormaster once before starting cron, because cron waits until it's time before
 # it actually runs anything, which is bad UX.
@@ -35,6 +65,3 @@ if command -v webhook >/dev/null 2>&1; then
     echo "Starting webhook server..."
     webhook -hooks /hooks.json -verbose &
 fi
-
-echo "Starting crond..."
-crond -f -l 1
