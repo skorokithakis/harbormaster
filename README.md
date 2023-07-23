@@ -40,8 +40,8 @@ have one directory that holds all the state, which you can easily back up and re
 Let's say you have the application you want to run, in a git repository, with
 a `docker-compose.yml` file in the same repo.
 
-Ideally, you'd want a flow that would pull changes to that repo, and restart the Docker
-container if there were any changes in the repo.
+Ideally, you'd want a flow that would fetch new commits in that repo, and restart the
+Docker container if there were any changes.
 
 That's all Harbormaster does. Simply tell it where your application lives, in the form
 of a `harbormaster.yml` file:
@@ -52,7 +52,7 @@ apps:
     url: https://github.com/someuser/somerepo.git
 ```
 
-Then run `harbormaster -c harbormaaster.yml`, and Harbormaster will clone the repo you
+Then run `harbormaster -c harbormaster.yml`, and Harbormaster will clone the repo you
 specified in the config, and run `docker compose up` on it.
 
 It does some other nice things, like give you separate directories for the repos and
