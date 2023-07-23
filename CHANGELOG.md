@@ -5,6 +5,8 @@
 
 ### Fixes
 
+* Add missing crond invocation back. [Stavros Korokithakis]
+
 * Don't complain about the directory if we restart the container. [Stavros Korokithakis]
 
 
