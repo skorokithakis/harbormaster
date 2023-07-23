@@ -35,6 +35,33 @@ It also cleanly stores data for all apps in a single `data/` directory, so you a
 have one directory that holds all the state, which you can easily back up and restore.
 
 
+## How it works
+
+Let's say you have the application you want to run, in a git repository, with
+a `docker-compose.yml` file in the same repo.
+
+Ideally, you'd want a flow that would pull changes to that repo, and restart the Docker
+container if there were any changes in the repo.
+
+That's all Harbormaster does. Simply tell it where your application lives, in the form
+of a `harbormaster.yml` file:
+
+```yaml
+apps:
+  myapp:
+    url: https://github.com/someuser/somerepo.git
+```
+
+Then run `harbormaster -c harbormaaster.yml`, and Harbormaster will clone the repo you
+specified in the config, and run `docker compose up` on it.
+
+It does some other nice things, like give you separate directories for the repos and
+their data, so you can easily make backups of your apps, and that's about it!
+
+If you run Harbormaster again, it will check that repo for changes, and if it finds any,
+it will pull them, stop the container, and start it again with the new changes.
+
+
 ## Installation
 
 You can run Harbormaster directly from Docker, without installing anything. Skip down to
@@ -94,15 +121,6 @@ Alternatively you can use `stavros/harbormaster:webhook` which ships with
 an example configuration but you should mount a custom one to `/hooks.json` with proper
 [rules](https://github.com/adnanh/webhook/blob/master/docs/Hook-Rules.md) for verifying
 the source.
-
-## High-level architecture overview
-
-At its core, Harbormaster works very simply: It takes a YAML file containing a list of
-repositories, pulls/clones them as necessary, messes with their `docker-compose.yml`
-files in the way you specify, and tells Compose to start, stop, or restart them, as
-needed.
-
-That's all it does.
 
 
 ## Usage

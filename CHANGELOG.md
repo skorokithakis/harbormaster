@@ -5,6 +5,8 @@
 
 ### Fixes
 
+* Fix issue with the Harbormaster Docker image not being able to find the data dir. [Stavros Korokithakis]
+
 * Add docker-cli-compose to the Dockerfile. [Stavros Korokithakis]
 
 
