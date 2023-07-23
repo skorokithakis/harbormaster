@@ -66,7 +66,7 @@ def _patched_run():
     commands = []
 
     def inner(command, chdir, environment=None, **kwargs):
-        if "docker compose" in command:
+        if "docker" in command and "compose" in command:
             commands.append(" ".join(command))
             return 0, b""
         else:

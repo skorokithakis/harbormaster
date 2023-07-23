@@ -32,9 +32,10 @@ def repos(tmp_path):
 services:
   web:
     image: app
-    random_number: {random.random()}
+    labels:
+      random_number: {random.random()}
     volumes:
-      - {{ HM_DATA_DIR }}/data:/data
+      - {{{{ HM_DATA_DIR }}}}/data:/data
 """,
             ),
         )
