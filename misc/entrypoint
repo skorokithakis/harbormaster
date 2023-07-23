@@ -68,3 +68,6 @@ if command -v webhook >/dev/null 2>&1; then
     echo "Starting webhook server..."
     webhook -hooks /hooks.json -verbose &
 fi
+
+echo "Starting crond..."
+crond -f -l 1

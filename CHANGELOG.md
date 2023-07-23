@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Don't complain about the directory if we restart the container. [Stavros Korokithakis]
+
+
 ## v0.3.2 (2023-07-23)
 
 ### Fixes
