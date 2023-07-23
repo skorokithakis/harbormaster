@@ -40,22 +40,25 @@ SUB_DIR="${MAIN_MOUNT##*/}"
 
 # Check if directory exists
 if [ -d "$MAIN_MOUNT" ]; then
-   echo "There was an error, the directory $MAIN_MOUNT already exists in the container."
-   echo "Since Harbormaster does some internal trickery to map the host's directory"
-   echo "structure inside its own container, this means that you can't use a directory"
-   echo "name outside the container that also exists inside."
-   echo ""
-   echo "I'm afraid you've hit a rare limitation, you'll have to move or rename your"
-   echo "Harbormaster data directory to something else on your computer."
-   exit 1
+    if [ ! -f "/hm_main_symlink_created" ]; then
+        echo "There was an error, the directory $MAIN_MOUNT already exists in the container."
+        echo "Since Harbormaster does some internal trickery to map the host's directory"
+        echo "structure inside its own container, this means that you can't use a directory"
+        echo "name outside the container that also exists inside."
+        echo ""
+        echo "I'm afraid you've hit a rare limitation, you'll have to move or rename your"
+        echo "Harbormaster data directory to something else on your computer."
+        exit 1
+    fi
 else
     # Create parent directories up to one level before
     mkdir -p "$PARENT_DIR"
 
     # Echo remaining directory
     ln -s /main "$PARENT_DIR"/"$SUB_DIR"
-fi
 
+    touch /hm_main_symlink_created
+fi
 
 # Run Harbormaster once before starting cron, because cron waits until it's time before
 # it actually runs anything, which is bad UX.
