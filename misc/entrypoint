@@ -21,7 +21,7 @@ MOUNTS=$(docker inspect "$HOSTNAME" -f '{{range .Mounts }}{{ .Type }} {{ .Destin
 HOST_MOUNT=$(echo "$MOUNTS" | awk '/^bind \/main/ {print $3}')
 
 if [ -n "$HOST_MOUNT" ]; then
-    echo "HARBORMASTER_HOST_DATA=$HOST_MOUNT" > /root/project_env.sh
+    echo "export HARBORMASTER_HOST_DATA=$HOST_MOUNT" > /root/project_env.sh
 else
     echo "Harbormaster error: /main volume not mounted properly, cannot continue."
     exit 1

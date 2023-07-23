@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Add docker-cli-compose to the Dockerfile. [Stavros Korokithakis]
+
+
 ## v0.3.1 (2023-07-22)
 
 ### Features
