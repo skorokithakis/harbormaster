@@ -1,6 +1,6 @@
 FROM python:3-alpine
 
-RUN apk add bash docker-cli dumb-init git openssh git-crypt && \
+RUN apk add bash docker-cli docker-cli-compose dumb-init git openssh git-crypt && \
     mkdir /main /config && \
     git config --global --add safe.directory /config
 
