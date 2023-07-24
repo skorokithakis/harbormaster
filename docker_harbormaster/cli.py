@@ -163,7 +163,7 @@ def _kill_orphan_containers(repo_id: str):
 def _run_command_full(
     command: List[Union[str, Path]],
     chdir: Path,
-    environment: Dict[str, str] = None,
+    environment: Optional[Dict[str, str]] = None,
     print_output: bool = False,
 ) -> Tuple[int, bytes]:
     """Run a command and return its exit code, stdout, and stderr."""
@@ -220,7 +220,9 @@ def _run_command_full(
 
 
 def _run_command(
-    command: List[Union[Path, str]], chdir: Path, environment: Dict[str, str] = None
+    command: List[Union[Path, str]],
+    chdir: Path,
+    environment: Optional[Dict[str, str]] = None,
 ) -> int:
     """Run a command and return its exit code."""
     return _run_command_full(command, chdir, environment=environment)[0]
@@ -238,7 +240,7 @@ def _run_command_assuming_exitcode_0(
     command: List[Union[Path, str]],
     chdir: Path,
     errmsg: str,
-    environment: Dict[str, str] = None,
+    environment: Optional[Dict[str, str]] = None,
 ) -> int:
     status, stdout = _run_command_full(command, chdir, environment=environment)
     return _postproc_command_assuming_exitcode0(status, stdout, errmsg)
