@@ -1,9 +1,6 @@
 Harbormaster
 ============
 
-[![PyPI](https://img.shields.io/pypi/v/docker_harbormaster)](https://pypi.org/project/docker-harbormaster/)
-[![Documentation Status](https://readthedocs.org/projects/harbormaster/badge/?version=latest)](https://harbormaster.readthedocs.io/en/latest/?badge=latest)
-
 Do you have apps you want to deploy to a server, but Kubernetes is way too much?
 Harbormaster is for you.
 
