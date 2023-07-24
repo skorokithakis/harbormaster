@@ -377,6 +377,31 @@ replacement will be replaced with `80`.
 This feature is still experimental and may change.
 
 
+### Update for Compose v2
+
+Since Docker Compose v2 now supports resolving environment variables inside the
+`docker-compose.yml` config directly, we no longer need ugly hacks like replacements.
+
+Now (though still a bit experimental), you can use environment variables in your Compose
+file directly, so the above becomes:
+
+```yaml
+volumes:
+  - ${HM_DATA_DIR}/my_data:/some_data_dir
+  - ${HM_DATA_DIR}/foo:/home/foo
+  - ${HM_CACHE_DIR}/my_cache:/some_cache_dir
+```
+
+Harbormaster does nothing special with these, beyond inserting them in the env before it
+runs Compose. This way, Harbormaster Compose files are no longer invalid Docker Compose
+files, and the replacements feature is entirely redundant (you can use environment
+variables instead).
+
+At this stage, I would encourage you to not use replacements at all, and only use
+environment variables (including for things like `HM_DATA_DIR`), as replacements will
+probably be removed entirely in some future version.
+
+
 ## Examples
 
 This is an example of the configuration for a Harbormaster-compatible Compose

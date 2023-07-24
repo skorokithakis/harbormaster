@@ -286,6 +286,15 @@ class App:
             }
         )
 
+        # Since Compose now supports env vars in the file, we should insert these there.
+        self.environment.update(
+            {
+                "HM_DATA_DIR": str(self.paths.data_dir),
+                "HM_CACHE_DIR": str(self.paths.cache_dir),
+                "HM_REPO_DIR": str(self.paths.repo_dir),
+            }
+        )
+
         self.replacements: Dict[str, str] = _read_var_file(
             filename=configuration.get("replacements_file", {}),
             base_dir=paths.config_dir,
