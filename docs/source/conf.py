@@ -14,7 +14,7 @@ author = "Stavros Korokithakis"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions: List[str] = []
+extensions: List[str] = ["myst_parser"]
 
 templates_path: List[str] = ["_templates"]
 exclude_patterns: List[str] = []
@@ -25,3 +25,14 @@ exclude_patterns: List[str] = []
 
 html_theme = "alabaster"
 html_static_path = ["_static"]
+
+myst_enable_extensions = [
+    "colon_fence",
+    "fieldlist",
+    "html_admonition",
+    "linkify",
+    "replacements",
+    "smartquotes",
+    "strikethrough",
+    "tasklist",
+]
