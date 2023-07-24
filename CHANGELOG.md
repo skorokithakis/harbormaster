@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Features
+
+* Add the `HM_` vars to the environment so they can be used in Compose v2 files. [Stavros Korokithakis]
+
+
 ## v0.3.3 (2023-07-23)
 
 ### Fixes

@@ -23,6 +23,9 @@ pytest = ">=5.2"
 gitchangelog = {url = "https://github.com/sarnold/gitchangelog/releases/download/3.1.1/gitchangelog-3.1.1-py3-none-any.whl"}
 GitPython = ">=3.1.18"
 
+[tool.poetry.group.dev.dependencies]
+sphinx-rtd-theme = "^1.2.2"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
