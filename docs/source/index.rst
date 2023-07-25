@@ -1,5 +1,5 @@
-Harbormaster documentation
-==========================
+Introduction
+============
 
 Do you have apps you want to deploy to a server, but Kubernetes is way too much?
 Harbormaster is for you.
@@ -19,7 +19,7 @@ Let's say you have a bog-standard Compose-packaged app in a git repository::
 
     services:
       main:
-        build.
+        build: .
         volumes:
           - ./data:/app_data
         ports:
@@ -50,7 +50,7 @@ Harbormaster-provided directory instead::
 
     services:
       main:
-        build.
+        build: .
         volumes:
           - ${HM_DATA_DIR}:/app_data
         ports:
@@ -69,5 +69,5 @@ Now you can read on about :doc:`how to install Harbormaster <installation>`.
    :maxdepth: 2
    :caption: Contents:
 
-   Introduction <self>
-   installation.md
+   index
+   installation
