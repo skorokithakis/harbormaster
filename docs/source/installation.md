@@ -22,7 +22,7 @@ docker run -d \
 ```
 
 Harbormaster will now run every five minutes, pull your config repository (from whatever
-remote it has), and run the apps in the config.
+remote the repo has as its `origin`), and run the apps in the config.
 
 If you want to run it immediately at some point, you can use the following command:
 

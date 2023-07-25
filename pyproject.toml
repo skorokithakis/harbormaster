@@ -4,7 +4,7 @@ version = "0.3.3"
 description = "A supervisor for docker-compose apps."
 authors = ["Stavros Korokithakis <hi@stavros.io>"]
 repository = "https://gitlab.com/stavros/harbormaster"
-homepage = "https://gitlab.com/stavros/harbormaster"
+homepage = "https://harbormaster.readthedocs.io/en/latest/"
 license = "AGPL-3.0-or-later"
 readme = "README.md"
 
