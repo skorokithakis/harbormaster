@@ -160,12 +160,6 @@ apps:
     compose_config:
       - docker-compose.yml
       - docker-compose.harbormaster.yml
-    # A dictionary of replacements (see below).
-    replacements:
-      MYVOLUMENAME: volume
-    # A file containing replacements. Works in the exact same way as the
-    # `environment_file` above.
-    replacements_file: "otherfile.txt"
     # A YAML environment file.
     environment_file: "somefile.yml"
   oldapp:
@@ -296,89 +290,36 @@ under the `archives/` directory and renamed to `<appname>-<deletion date>`.
 Cache is anything you don't care about. When you remove an app from the config,
 the cache dir is deleted.
 
-Harbormaster will look for a file called `docker-compose.yml` at the root of the
-repo, and look for some specific strings (you read more about this in the
-"replacements" section below).
+Harbormaster provides some environment variables you can use in your Compose file to
+allow mounting these directories as volumes.
 
-The built-in strings to be replaced are:
-
-* `{{ HM_DATA_DIR }}` - The app's data that you want to persist. Will be stored in the
+* `${HM_DATA_DIR}` - The app's data that you want to persist. Will be stored in the
   `data/` directory, under the main Harbormaster working directory.
-* `{{ HM_CACHE_DIR }}` - Any data you don't want to keep. Will be stored in the `cache/`
-  directory, under the main Harbormaster working directory.
-* `{{ HM_REPO_DIR }}` - The app's repository. Use this if you want to mount the app's
-  directory itself, for example to access some code that you don't want to copy into the
-  container.
+* `${HM_CACHE_DIR}` - Any data you don't want to keep. Will be stored in the `cache/`
+  directory, under the main Harbormaster working directory. Harbormaster doesn't do
+  anything special with this directory, the separation between `data/` and `cache/` is
+  just in case you want to separate data into a directory you want to back up and one
+  you don't.
+* `${HM_REPO_DIR}` - The app's repository. Use this if you want to mount the app's
+  directory itself, for example to access some of the repo's files that you don't want
+  to copy into the container.
 
-They will be replaced with the proper directory names (without trailing
-slashes), so the `volumes` section of your Compose file in your repository
-should look something like this:
-
-```yaml
-volumes:
-  - {{ HM_DATA_DIR }}/my_data:/some_data_dir
-  - {{ HM_DATA_DIR }}/foo:/home/foo
-  - {{ HM_CACHE_DIR }}/my_cache:/some_cache_dir
-```
-
-
-### Replacements
-
-Sometimes, the user needs to give access to paths that already exist on their
-system, or specify more parameters in the Dockerfile. This is where replacements
-come in.
-
-Replacements are basically custom replacement strings (like the data directory
-strings) that you can specify yourself.
-
-For example, if the user needs to specify a directory with their media, you can
-ask them to include a replacement called `MEDIA_DIR` in their Harbormaster
-config file, and then use the string `{{ HM_MEDIA_DIR }}` in your Compose file
-to mount the volume, like so:
+They will be replaced with the proper directory names (without trailing slashes), so the
+`volumes` section of your Compose file in your repository should look something like
+this:
 
 ```yaml
 volumes:
-  - {{ HM_MEDIA_DIR }}:/some_container_dir
+  - ${HM_DATA_DIR}/my_data:/some_data_dir
+  - ${HM_DATA_DIR}/foo:/home/foo
+  - ${HM_CACHE_DIR}/my_cache:/some_cache_dir
 ```
-
-Harbormaster will replace that string wherever in the file it finds it (not
-just the `volumes` section, and the user can specify it in their Harbormaster
-config like so:
-
-
-```yaml
-someapp:
-  url: https://gitlab.com/otheruser/otherrepo.git
-  replacements:
-    MEDIA_DIR: /media/my_media
-```
-
-Keep in mind that if the variable is called `VARNAME`, the string that will end
-up being replaced is `{{ HM_VARNAME }}`. If the variable is not found, it will
-not be replaced or touched at all. This is to avoid messing with any unrelated
-templates in the Compose file.
-
-Also, note that replacements will be written on disk, in the Compose config
-file. If, for some reason, you want to avoid that (e.g. if you have secrets you
-don't want exposed), try to use environment variables instead.
-
-One experimental feature of replacements is the ability to specify defaults:
-
-```yaml
-services:
-  app:
-    environment:
-      HTTP_PORT: {{ HM_PORT:80 }}
-      STACK: {{ HM_STACK:"production" }}
-```
-
-If you don't specify the `PORT` variable in the Harbormaster config file, the
-replacement will be replaced with `80`.
-
-This feature is still experimental and may change.
 
 
 ### Update for Compose v2
+
+**NOTE:** This is only for users of Harbormaster when it still implemented replacements.
+If you don't know what replacements are, you can skip this.
 
 Since Docker Compose v2 now supports resolving environment variables inside the
 `docker-compose.yml` config directly, we no longer need ugly hacks like replacements.
@@ -440,7 +381,7 @@ services:
   main:
     command: bash -c 'cd /state; /code/myscript'
     volumes:
-      - {{ HM_DATA_DIR }}:/state/
+      - ${HM_DATA_DIR}:/state/
 ```
 
 The Harbormaster config file is very straightforward, it specifies a repo URL
