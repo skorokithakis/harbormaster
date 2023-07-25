@@ -11,6 +11,9 @@ It does this by taking a list of git repository URLs that contain Docker
 Compose files and running the Compose apps they contain. It will also handle
 updating/restarting the apps when the repositories change.
 
+Please [visit the documentation](https://harbormaster.readthedocs.io/en/latest/) for
+more details.
+
 
 ## Rationale
 
