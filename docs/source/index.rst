@@ -1,7 +1,17 @@
 Introduction
 ============
 
-Do you have apps you want to deploy to a server, but Kubernetes is way too much?
+
+.. raw:: html
+
+   <img
+     class="align-right"
+     src="_static/logo.jpg"
+     alt="A vector graphics man in naval uniform."
+     style="min-width: 120px; width: 40vw; max-width: 200px;"
+   >
+
+Do you have apps you want to deploy to a server, but Kubernetes is way too heavy?
 Harbormaster is for you.
 
 Harbormaster is a small and simple container orchestrator that lets you easily deploy
