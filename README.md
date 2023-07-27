@@ -38,4 +38,4 @@ changed. That's it!
 It also cleanly stores data for all apps in a single `data/` directory, so you always
 have one directory that holds all the state, which you can easily back up and restore.
 
-See more details in [the documentation](https://harbormaster.readthedocs.io/en/latest/
+See more details in [the documentation](https://harbormaster.readthedocs.io/en/latest/).
