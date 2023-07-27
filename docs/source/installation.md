@@ -1,16 +1,23 @@
 Installation
 ============
 
-You can run Harbormaster by using just Docker. You need to follow a few simple steps to set
-up your configuration and SSH:
+There are two ways to run Harbormaster: In a Docker container, and on the host system.
+The Docker container method is preferable, as it's much easier to get started with.
 
-* Your `harbormaster.yml` configuration file should be in a git repository. Check that
-  repository out into some directory, that we're going to call your "config" directory.
-* If you need an SSH key to pull the Harbormaster configuration file and the various
-  repositories, copy the private key into your config directory, to a file called
-  `ssh_private_key` (make sure it's not protected with a passphrase).
-* Make a directory for Harbormaster to work in somewhere. All your apps' data is going
-  to reside in that directory.
+
+Docker container
+----------------
+
+You can run Harbormaster by using just Docker. You need to follow a few steps to set up
+your configuration and SSH:
+
+* Add your `harbormaster.yml` config (plus associated env/secrets files) to a git
+  repository, and check it out somewhere on the host. That is your "config" directory.
+* If you're going to be using SSH to pull the above repository, as well as any
+  app repositories (mentioned in the above `harbormaster.yml`), copy the private SSH key
+  into the config directory, and name it `ssh_private_key`.
+* Create a directory for Harbormaster to put all the apps' volumes/data into. That is
+  your Harbormaster working directory.
 * Run the Harbormaster image:
 ```bash
 docker run -d \
