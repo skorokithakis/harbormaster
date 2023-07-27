@@ -54,9 +54,11 @@ What about my data, though?
 ---------------------------
 
 Excellent question, your application has data you want to persist. For tidiness,
-Harbormaster provides its own mountpoint where you should persist the data. All you need
-to do, is change your app's Compose file to mount the ``app_data`` directory into the
-Harbormaster-provided directory instead::
+Harbormaster provides its own mountpoint where you should persist the data (for more
+information on this, see :ref:`the handling data directories section <handling-data-directories>`).
+
+All you need to do, is change your app's Compose file to mount the ``app_data``
+directory into the Harbormaster-provided directory instead::
 
     services:
       main:
@@ -81,3 +83,8 @@ Now you can read on about :doc:`how to install Harbormaster <installation>`.
 
    index
    installation
+   configuration
+   best_practices
+   testing
+   examples
+   bundled_apps
