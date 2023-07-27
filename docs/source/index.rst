@@ -17,9 +17,6 @@ Harbormaster is for you.
 Harbormaster is a small and simple container orchestrator that lets you easily deploy
 multiple Docker-Compose applications on a single host.
 
-Note that Harbormaster does not provide ingress, you'll need to bring your own. It just
-runs your apps.
-
 
 How does it work?
 -----------------
@@ -49,6 +46,10 @@ a config file::
 Harbormaster will look at its config file, clone the ``myapp`` repo, and run ``docker
 compose up`` on it. Harbormaster will run periodically, pull the repo, and restart your
 Docker containers if there's a change.
+
+**NOTE:** Harbormaster does not provide ingress, you'll need to bring your own. It just
+runs your apps.
+
 
 What about my data, though?
 ---------------------------
