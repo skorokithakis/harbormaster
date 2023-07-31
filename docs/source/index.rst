@@ -85,6 +85,7 @@ Now you can read on about :doc:`how to install Harbormaster <installation>`.
    index
    installation
    configuration
+   converting_compose_apps
    best_practices
    testing
    examples
