@@ -48,13 +48,13 @@ class Paths:
     def for_workdir(cls, workdir: Path, config_dir: Path):
         """Derive the working paths from a base workdir path."""
         return cls(
-            workdir=workdir,
-            config_dir=config_dir,
-            data_dir=workdir / DATA_DIR_NAME,
-            archives_dir=workdir / ARCHIVES_DIR_NAME,
-            repos_dir=workdir / REPOS_DIR_NAME,
-            caches_dir=workdir / CACHES_DIR_NAME,
-            cache_file=workdir / CACHE_FILE_NAME,
+            workdir=workdir.absolute(),
+            config_dir=config_dir.absolute(),
+            data_dir=(workdir / DATA_DIR_NAME).absolute(),
+            archives_dir=(workdir / ARCHIVES_DIR_NAME).absolute(),
+            repos_dir=(workdir / REPOS_DIR_NAME).absolute(),
+            caches_dir=(workdir / CACHES_DIR_NAME).absolute(),
+            cache_file=(workdir / CACHE_FILE_NAME).absolute(),
         )
 
 
