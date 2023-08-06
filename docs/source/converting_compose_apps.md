@@ -48,3 +48,39 @@ One issue here might be that, if you try to run a Compose command (e.g. `docker 
 logs`), Compose might complain that those variables are not set. In that case, you will
 have to set them yourself (possibly to something generic, since they don't always
 matter).
+
+:::{admonition} Historical note
+:class: warning
+
+Docker Compose v1.x did not support environment variables in its YAML files, so
+Harbormaster used something called **replacements**. Replacements were basically
+template variables, that looked like `{{ HM_DATA_DIR }}`, and were written into the YAML
+file itself, when Harbormaster pulled it into the repo.  Unfortunately, this made the
+files incompatible with Compose, and invalid YAML.
+
+When Compose v2 added environment variable support, there was much rejoicing, as this
+meant that Harbormaster no longer needs to hackily rewrite the YAML file with values,
+and does not need two different lists of variables (environment variables and
+replacements variables), we can just use environment variables for everything.
+
+As of this writing, Harbormaster actually supports **both** approaches, and using
+replacements will work fine (Harbormaster just inserts all the replacements variables
+into the enviroment as well), even though this documentation only mentions the
+"environment variable" approach, as I got too excited about it and decided to only
+mention that as the way forward.
+
+In reality, however, after trying it for a bit, it appears to be much more awkward than
+replacements. With replacements, all the required data is already in the YAML file, and
+you can run, for example `docker compose logs` without having to specify any variables
+in your environment (the volumes/paths/etc have already been replaced into the YAML
+file).
+
+I mention this here because you may find environment variables annoying as well. Instead
+of removing replacements completely, I think that, in the future, I will mention both
+approaches in the documentation (and their pros/cons), and leave it up to the user to
+select one or the other.
+
+Thank you for reading my inane ramblings!
+
+Stavros
+:::
