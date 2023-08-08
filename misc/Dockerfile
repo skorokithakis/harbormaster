@@ -22,4 +22,4 @@ VOLUME /main
 VOLUME /config
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ["/usr/bin/entrypoint"]
+CMD /usr/bin/dumb-init /usr/bin/entrypoint
