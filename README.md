@@ -4,8 +4,9 @@ Harbormaster
 Do you have apps you want to deploy to a server, but Kubernetes is way too much?
 Harbormaster is for you.
 
-Harbormaster is a small and simple container orchestrator that lets you easily deploy
-multiple Docker-Compose applications on a single host.
+Harbormaster is a small container orchestrator that lets you run multiple Docker Compose
+applications on a single host, with automatic deploys/restarts, simply by pushing to a
+git repo.
 
 It does this by taking a list of git repository URLs that contain Docker
 Compose files and running the Compose apps they contain. It will also handle
