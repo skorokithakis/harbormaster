@@ -156,3 +156,4 @@ Thumbs.db
 TODO.txt
 .vscode/
 *.swp
+.aider*
