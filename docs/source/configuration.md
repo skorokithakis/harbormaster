@@ -48,12 +48,14 @@ apps:
     - `environment_file`: A YAML environment file.
   - `oldapp`: An old application that shouldn't be run.
     - `enabled`: If set to `false`, the app will not be run.
-    - `url`: The git repository URL to clone. Two apps can use the same repo.
+    - `url`: The git repository URL to clone. Two apps can use the same repo, in case
+      you want to have multiple apps in the same repo (with different Compose filenames,
+      or on different branches).
 
 To execute Harbormaster, run `harbormaster run` in the same directory as the
 configuration file. Harbormaster will parse the file, automatically download the
 repositories mentioned in it and keep them up to date.
 
 **Note:** Ensure that the Compose config in each of the repos does not use the
-`container_name` directive, otherwise Harbormaster might not always be able to terminate
-your apps when necessary.
+`container_name` directive, otherwise Harbormaster might not always be able to find your
+apps and restart them when necessary.

@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixes
+
+* Run the Docker image entrypoint under dumb-init. [Stavros Korokithakis]
+
+
 ## v0.3.4 (2023-07-31)
 
 ### Features

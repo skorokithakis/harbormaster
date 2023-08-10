@@ -65,14 +65,33 @@ directory into the Harbormaster-provided directory instead::
       main:
         build: .
         volumes:
-          - ${HM_DATA_DIR}:/app_data
+          - ${HM_DATA_DIR}/data:/app_data
         ports:
           - 8080:8080
         restart: unless-stopped
 
-Now all your apps' data will be stored neatly under ``harbormaster-main/data/myapp/``.
+Harbormaster will ensure ``${HM_DATA_DIR}`` expands to ``harbormaster-main/data/myapp``,
+so all your apps' data will be stored neatly under ``harbormaster-main/data/myapp/data``.
+You don't have to mount the volume under ``/data``, you can mount it directly to
+``${HM_DATA_DIR}`` if you want. You can also use as many mounts as you want, just make
+sure each is a different subdirectory.
 
-That's it!
+For example::
+
+    services:
+      main:
+        build: .
+        volumes:
+          - ${HM_DATA_DIR}/data:/app_data
+          - ${HM_DATA_DIR}/other_data:/more_data
+          - ${HM_CACHE_DIR}/some_cache:/cache1
+          - ${HM_CACHE_DIR}/some_other_cache:/cache2
+        ports:
+          - 8080:8080
+        restart: unless-stopped
+
+You can do this with any variable, there's no magic (the variables above just
+straight-up expand to a dir name).
 
 Now you can read on about :doc:`how to install Harbormaster <installation>`.
 
