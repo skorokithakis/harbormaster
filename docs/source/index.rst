@@ -18,11 +18,58 @@ Harbormaster is a small and simple container orchestrator that lets you easily d
 multiple Docker-Compose applications on a single host.
 
 
+Running your first app
+----------------------
+
+Here's how to get started with Harbormaster:
+
+Create a new directory somewhere, and ``cd`` into it:
+
+.. code-block:: bash
+
+    $ mkdir mydir
+    $ cd mydir
+
+Create a file in it called ``harbormaster.yml``, with these contents:
+
+.. code-block:: yaml
+
+    apps:
+      hello_world:
+        url: https://gitlab.com/stavros/harbormaster.git
+        compose_config:
+        - apps/hello_world/docker-compose.yml
+
+This is the configuration file that tells Harbormaster what to run. This will run the
+"Hello world" app from the Harbormaster repository itself.
+
+Then, run Harbormaster (no need to have it installed beforehand):
+
+.. code-block:: bash
+
+    $ docker run \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v (pwd):/config \
+        -v (pwd):/main \
+        stavros/harbormaster
+
+You should see Docker pull down the Harbormaster container, start it, and then
+Harbormaster will look at its configuration file, pull the repo, and run the Compose app
+inside.
+
+Now, visit http://localhost:8000, and Harbormaster will greet you.
+
+You can press Ctrl-C to stop Harbormaster, and ``docker stop <container id>`` to stop
+the app. You will notice that Harbormaster has created various directories (``cache``,
+``data``, ``repos``) in your directory. That's where Harbormaster stores everything.
+
+
 How does it work?
 -----------------
 
-Let's say you have a bog-standard Compose-packaged app in a git repository::
+Let's say you have a bog-standard Compose-packaged app in a git repository:
 
+.. code-block:: yaml
 
     services:
       main:
@@ -37,7 +84,9 @@ You want this deployed onto some server, but you want something that can check y
 every so often, see if there are any changes, and deploy/restart your app if so.
 
 That's what Harbormaster does. You run its Docker container on the server, and give it
-a config file::
+a config file:
+
+.. code-block:: yaml
 
     apps:
       myapp:
@@ -59,7 +108,9 @@ Harbormaster provides its own mountpoint where you should persist the data (for 
 information on this, see :ref:`the handling data directories section <handling-data-directories>`).
 
 All you need to do, is change your app's Compose file to mount the ``app_data``
-directory into the Harbormaster-provided directory instead::
+directory into the Harbormaster-provided directory instead:
+
+.. code-block:: yaml
 
     services:
       main:
@@ -76,7 +127,9 @@ You don't have to mount the volume under ``/data``, you can mount it directly to
 ``${HM_DATA_DIR}`` if you want. You can also use as many mounts as you want, just make
 sure each is a different subdirectory.
 
-For example::
+For example:
+
+.. code-block:: yaml
 
     services:
       main:
