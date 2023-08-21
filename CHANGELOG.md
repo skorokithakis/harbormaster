@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+### Features
+
+* Change the cron interval in the Docker container to 10min. [Stavros Korokithakis]
+
 ### Fixes
 
 * Run the Docker image entrypoint under dumb-init. [Stavros Korokithakis]

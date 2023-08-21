@@ -14,7 +14,7 @@ author = "Stavros Korokithakis"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions: List[str] = ["myst_parser"]
+extensions: List[str] = ["myst_parser", "sphinxcontrib.mermaid"]
 
 templates_path: List[str] = ["_templates"]
 exclude_patterns: List[str] = []
