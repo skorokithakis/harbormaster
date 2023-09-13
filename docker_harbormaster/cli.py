@@ -785,6 +785,7 @@ def run(config: Path, working_dir: Path, force_restart: bool):
             ],
             workdir,
         )
+    click.echo("Finished successfully." if success else "Finished with errors.")
     sys.exit(0 if success else 1)
 
 
