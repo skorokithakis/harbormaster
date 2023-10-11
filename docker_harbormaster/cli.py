@@ -452,6 +452,7 @@ class App:
                 "compose",
                 *self.compose_config_command,
                 "pull",
+                "--ignore-buildable",
             ],
             self.paths.repo_dir,
             "Could not pull the Docker image",
