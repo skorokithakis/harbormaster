@@ -5,6 +5,8 @@
 
 ### Features
 
+* Print a completion message to the console. [Stavros Korokithakis]
+
 * Change the cron interval in the Docker container to 10min. [Stavros Korokithakis]
 
 ### Fixes

@@ -1,9 +1,17 @@
 repos:
-- repo: https://github.com/ambv/black
-  rev: 23.7.0
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.6.8
   hooks:
-  - id: black
-    name: Reformat files
+    - id: ruff
+      args: [ --fix ]
+    - id: ruff-format
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.11.2
+  hooks:
+  - id: mypy
+    name: Run type checks
+    args: ["--ignore-missing-imports"]
+    additional_dependencies: ["types-requests"]
 - repo: local
   hooks:
   - id: no-testing
@@ -19,22 +27,6 @@ repos:
     language: pygrep
     types: [python]
     stages: [manual]
-- repo: https://github.com/asottile/reorder_python_imports
-  rev: v3.10.0
-  hooks:
-  - id: reorder-python-imports
-    name: Reorder imports
-- repo: https://github.com/charliermarsh/ruff-pre-commit
-  rev: 'v0.0.280'
-  hooks:
-    - id: ruff
-- repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.4.1
-  hooks:
-  - id: mypy
-    name: Run type checks
-    args: ["--ignore-missing-imports"]
-    additional_dependencies: ["types-pyyaml", "types-attrs"]
 - repo: local
   hooks:
   - id: gitchangelog
