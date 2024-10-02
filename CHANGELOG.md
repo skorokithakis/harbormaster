@@ -11,6 +11,8 @@
 
 ### Fixes
 
+* Don't try to pull buildable images (fixes #18) [Id an]
+
 * Run the Docker image entrypoint under dumb-init. [Stavros Korokithakis]
 
 
