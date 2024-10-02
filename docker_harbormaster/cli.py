@@ -106,7 +106,7 @@ def _read_var_file(
         # This file is YAML.
         try:
             output = yaml.safe_load(contents)
-            assert type(output) == dict
+            assert isinstance(output, dict)
             assert all(type(x) is str for x in output.keys())
             assert all(type(x) is str for x in output.values())
             # Convert everything to a string.
@@ -925,7 +925,7 @@ def test(
 
     # Show it.
     click.secho(
-        "\U00002714\U0000FE0F Run finished.\n\n"
+        "\U00002714\U0000fe0f Run finished.\n\n"
         "If everything went well, you can use this stanza in your Harbormaster "
         "config file:\n",
         fg="green",
