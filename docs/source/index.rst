@@ -37,7 +37,7 @@ Create a file in it called ``harbormaster.yml``, with these contents:
 
     apps:
       hello_world:
-        url: https://gitlab.com/stavros/harbormaster.git
+        url: https://github.com/skorokithakis/harbormaster.git
         compose_config:
         - apps/hello_world/docker-compose.yml
 

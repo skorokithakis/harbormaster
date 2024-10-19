@@ -2,7 +2,7 @@
 
 Harbormaster includes some built-in apps in its repository, for your
 convenience. Check out the
-[apps](https://gitlab.com/stavros/harbormaster/-/tree/master/apps) directory for the
+[apps](https://github.com/skorokithakis/harbormaster/-/tree/master/apps) directory for the
 Compose files. You can include them in your Harbormaster config directly, with no other
 configuration.
 
@@ -12,7 +12,7 @@ Here's an example that includes the [Plex media server](https://www.plex.tv/) an
 ```yaml
 apps:
   plex:
-    url: https://gitlab.com/stavros/harbormaster.git
+    url: https://github.com/skorokithakis/harbormaster.git
     compose_config: apps/plex-bridge.yml
     environment:
       ADVERTISE_IP: "<the IP to advertise>"
@@ -23,12 +23,12 @@ apps:
       MEDIA_DIR: "<your video directory on the host>"
 
   ztncui:
-    url: https://gitlab.com/stavros/harbormaster.git
+    url: https://github.com/skorokithakis/harbormaster.git
     environment:
       ZTNCUI_PASSWD: "<some password>"
     compose_config: apps/ztncui/docker-compose.harbormaster.yml
 
   octoprint:
-    url: https://gitlab.com/stavros/harbormaster.git
+    url: https://github.com/skorokithakis/harbormaster.git
     compose_config: apps/octoprint/docker-compose.harbormaster.yml
 ```
