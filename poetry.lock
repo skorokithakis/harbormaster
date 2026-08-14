@@ -218,31 +218,6 @@ files = [
 test = ["pytest (>=6)"]
 
 [[package]]
-name = "gitchangelog"
-version = "3.1.1"
-description = "generates a changelog file from a local git checkout"
-optional = false
-python-versions = ">=3.6"
-groups = ["dev"]
-files = [
-    {file = "gitchangelog-3.1.1-py3-none-any.whl", hash = "sha256:a3b6246a001e37cac0f3773b8eda08a145892ea6fc6e023712355a816409f633"},
-]
-
-[package.dependencies]
-Mako = "*"
-pystache = {url = "https://github.com/VCTLabs/pystache/releases/download/v0.6.2/pystache-0.6.2.tar.gz"}
-
-[package.extras]
-all = ["coverage-python-version", "coverage[toml]", "minimock", "pytest", "pytest-cov", "recommonmark", "sphinx", "sphinx-rtd-theme", "sphinxcontrib-apidoc"]
-cov = ["coverage-python-version", "coverage[toml]"]
-doc = ["recommonmark", "sphinx", "sphinx-rtd-theme", "sphinxcontrib-apidoc"]
-test = ["minimock", "pytest", "pytest-cov"]
-
-[package.source]
-type = "url"
-url = "https://github.com/sarnold/gitchangelog/releases/download/3.1.1/gitchangelog-3.1.1-py3-none-any.whl"
-
-[[package]]
 name = "gitdb"
 version = "4.0.10"
 description = "Git Object Database"
@@ -367,26 +342,6 @@ benchmark = ["pytest", "pytest-benchmark"]
 dev = ["black", "flake8", "isort", "pre-commit", "pyproject-flake8"]
 doc = ["myst-parser", "sphinx", "sphinx-book-theme"]
 test = ["coverage", "pytest", "pytest-cov"]
-
-[[package]]
-name = "mako"
-version = "1.2.4"
-description = "A super-fast templating language that borrows the best ideas from the existing templating languages."
-optional = false
-python-versions = ">=3.7"
-groups = ["dev"]
-files = [
-    {file = "Mako-1.2.4-py3-none-any.whl", hash = "sha256:c97c79c018b9165ac9922ae4f32da095ffd3c4e6872b45eded42926deea46818"},
-    {file = "Mako-1.2.4.tar.gz", hash = "sha256:d60a3903dc3bb01a18ad6a89cdbe2e4eadc69c0bc8ef1e3773ba53d44c3f7a34"},
-]
-
-[package.dependencies]
-MarkupSafe = ">=0.9.2"
-
-[package.extras]
-babel = ["Babel"]
-lingua = ["lingua"]
-testing = ["pytest"]
 
 [[package]]
 name = "markdown-it-py"
@@ -574,27 +529,6 @@ files = [
 
 [package.extras]
 plugins = ["importlib-metadata ; python_version < \"3.8\""]
-
-[[package]]
-name = "pystache"
-version = "0.6.2"
-description = "Mustache for Python"
-optional = false
-python-versions = ">=3.6"
-groups = ["dev"]
-files = [
-    {file = "pystache-0.6.2.tar.gz", hash = "sha256:66ea5a6cfc2279b6cfe39955ac1808f92e88f176d594ad1a7bbe7f8ad5f0209b"},
-]
-
-[package.extras]
-all = ["coverage", "coverage_python_version", "pytest", "pytest-cov", "recommonmark", "sphinx", "sphinx_rtd_theme", "sphinxcontrib-apidoc"]
-cov = ["coverage", "coverage_python_version"]
-doc = ["recommonmark", "sphinx", "sphinx_rtd_theme", "sphinxcontrib-apidoc"]
-test = ["pytest", "pytest-cov"]
-
-[package.source]
-type = "url"
-url = "https://github.com/VCTLabs/pystache/releases/download/v0.6.2/pystache-0.6.2.tar.gz"
 
 [[package]]
 name = "pytest"
@@ -1052,4 +986,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.8,<4"
-content-hash = "1e0bbc0786251847d545e3749626e245337d9eff9d5ef43bd1cd9ea7d21b9838"
+content-hash = "f5e2f6e5c0e49e26771aa7d470769dfdeab6e4de861edfceedee8375f210c90c"
