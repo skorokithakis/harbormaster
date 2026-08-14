@@ -362,12 +362,10 @@ def _kill_orphan_containers(repo_dir: Path) -> None:
             continue
         label_dir = Path(label)
         # The label path is kept when it is the repo directory or a
-        # subdirectory of it. Comparing `repo_dir` against the label path's
-        # parent components, rather than comparing string prefixes, is what
-        # keeps `repos/foo` from matching a container labelled
-        # `repos/foo-bar`. `Path.is_relative_to` would read better, but it
-        # needs Python 3.9 and we still declare support for 3.8.
-        if label_dir == repo_dir or repo_dir in label_dir.parents:
+        # subdirectory of it. Comparing path components rather than string
+        # prefixes is what keeps `repos/foo` from matching a container
+        # labelled `repos/foo-bar`.
+        if label_dir.is_relative_to(repo_dir):
             container_ids.append(container_id)
 
     return_codes = []
@@ -1122,12 +1120,10 @@ def _remove_stale_volume_records(app_name: str, paths: Paths) -> bool:
             continue
         record = json.loads(inspect_output)[0]
         device_path = Path((record.get("Options") or {}).get("device", ""))
-        # `Path.is_relative_to` would read better, but it needs Python 3.9 and we
-        # still declare support for 3.8. Checking the parents is equivalent here,
-        # as a device path is always a directory *under* one of these two.
+        # A device path always sits under one of these two directories.
         if not (
-            paths.data_dir in device_path.parents
-            or paths.caches_dir in device_path.parents
+            device_path.is_relative_to(paths.data_dir)
+            or device_path.is_relative_to(paths.caches_dir)
         ):
             # The volume points outside the workdir, so its data is not ours to
             # discard, whatever it may be.

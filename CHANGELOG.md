@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+### Changes
+
+* Require Python 3.9 or later. Python 3.8 reached end of life in October 2024. [Stavros Korokithakis]
+
 ### Features
 
 * Add the `manage_volumes` option, to store an app's named volumes in its data and cache directories. [Stavros Korokithakis]
