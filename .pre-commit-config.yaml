@@ -10,8 +10,20 @@ repos:
   hooks:
   - id: mypy
     name: Run type checks
-    args: ["--ignore-missing-imports"]
-    additional_dependencies: ["types-requests", "attrs", "types-PyYAML"]
+    # apps/ holds demo Compose applications, not project source, and one of them
+    # imports flask. This has to be pre-commit's exclude, not mypy's own exclude
+    # option: pre-commit passes filenames explicitly, and mypy ignores its own
+    # exclude for files named on the command line.
+    exclude: '^apps/'
+    # This list must track the dependencies in pyproject.toml, as nothing enforces that automatically.
+    additional_dependencies:
+    - attrs
+    - click
+    - click-help-colors
+    - GitPython
+    - pytest
+    - ruamel.yaml
+    - types-PyYAML
 - repo: local
   hooks:
   - id: no-testing
