@@ -42,6 +42,9 @@ apps:
       Harbormaster config file (this file). The file can also be a YAML file with the
       .yml extension, containing a single YAML collection of string values. Variables in
       the `environment` key take precedence over variables in the file.
+    - `manage_volumes`: If set to `true`, Harbormaster stores the named volumes that the
+      app's Compose file declares in its data and cache directories. See
+      [managed volumes](managed-volumes). Defaults to `false`.
   - `otherapp`: Another application to deploy.
     - `compose_config`: The Compose config filename, if it's not `docker-compose.yml`,
       or if you want to use Harbormaster-specific overrides.

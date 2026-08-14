@@ -5,6 +5,8 @@
 
 ### Features
 
+* Add the `manage_volumes` option, to store an app's named volumes in its data and cache directories. [Stavros Korokithakis]
+
 * Print a completion message to the console. [Stavros Korokithakis]
 
 * Change the cron interval in the Docker container to 10min. [Stavros Korokithakis]

@@ -147,6 +147,11 @@ For example:
 You can do this with any variable, there's no magic (the variables above just
 straight-up expand to a dir name).
 
+If you'd rather keep your Compose file free of Harbormaster variables, you can set
+``manage_volumes: true`` for the app and declare plain named volumes instead.
+Harbormaster will store them in the same directories for you. See :ref:`managed volumes
+<managed-volumes>`.
+
 Now you can read on about :doc:`how to install Harbormaster <installation>`.
 
 

@@ -157,3 +157,4 @@ TODO.txt
 .vscode/
 *.swp
 .aider*
+.tickets/

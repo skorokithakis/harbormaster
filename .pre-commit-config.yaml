@@ -11,7 +11,7 @@ repos:
   - id: mypy
     name: Run type checks
     args: ["--ignore-missing-imports"]
-    additional_dependencies: ["types-requests"]
+    additional_dependencies: ["types-requests", "attrs", "types-PyYAML"]
 - repo: local
   hooks:
   - id: no-testing
@@ -27,15 +27,6 @@ repos:
     language: pygrep
     types: [python]
     stages: [manual]
-- repo: local
-  hooks:
-  - id: gitchangelog
-    language: system
-    always_run: true
-    pass_filenames: false
-    name: Generate changelog
-    entry: bash -c "gitchangelog > CHANGELOG.md"
-    stages: [commit]
 - repo: local
   hooks:
   - id: forbid_prints

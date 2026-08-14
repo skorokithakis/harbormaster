@@ -49,6 +49,84 @@ logs`), Compose might complain that those variables are not set. In that case, y
 have to set them yourself (possibly to something generic, since they don't always
 matter).
 
+
+(managed-volumes)=
+## Managed volumes
+
+If you don't want to sprinkle `${HM_DATA_DIR}` all over your Compose file, Harbormaster
+can manage your named volumes for you instead. Add `manage_volumes: true` to the app in
+your Harbormaster config file:
+
+```yaml
+apps:
+  myapp:
+    url: https://github.com/someone/myapp.git
+    manage_volumes: true
+```
+
+Then just declare plain named volumes in your Compose file, the way any Compose app
+would:
+
+```yaml
+services:
+  main:
+    image: myapp
+    volumes:
+      - config:/config
+      - cache-transcode:/transcode
+
+volumes:
+  config:
+  cache-transcode:
+```
+
+Harbormaster rewrites each of these volumes so that it is backed by a directory on the
+host, exactly like the bind mounts above. `config` will live in
+`data/myapp/config`, and `cache-transcode` will live in `caches/myapp/cache-transcode`.
+Volumes whose name starts with `cache-` go to the cache directory, everything else goes
+to the data directory.
+
+The upshot is that your Compose file stays a normal Compose file. You can run `docker
+compose logs` (or any other command) without setting any environment variables, and the
+data is still in a plain directory you can back up, exactly as before. Data directories
+are archived when you remove the app, and cache directories are deleted, just like with
+`${HM_DATA_DIR}` and `${HM_CACHE_DIR}`.
+
+Harbormaster leaves alone any volume that declares its own `driver`, `driver_opts`,
+`external` or `name` key, so you can still opt individual volumes out.
+
+### Migrating to managed volumes
+
+If you name a volume the same as the directory you used before, it points at the same
+place, so there's nothing to move. These two are equivalent:
+
+```yaml
+    volumes:
+      - ${HM_DATA_DIR}/config:/config
+```
+
+```yaml
+    volumes:
+      - config:/config
+```
+
+### Caveats
+
+`manage_volumes` is off by default, and you should think before turning it on for an app
+that is already running with plain named volumes. Docker stores that data in its own
+directory, and Harbormaster will not move it for you. Collision checking only happens
+against the Docker volume name Harbormaster generates, `hm_<app_id>_<volume>`, so an
+ordinary pre-existing Compose volume (Docker names those `<project>_<volume>`) will not
+collide: the app starts normally, and the old volume is left behind, unmigrated, with
+its data still in Docker's storage, and no warning is issued. Harbormaster only refuses
+to start the app if a volume named exactly `hm_<app_id>_<volume>` already exists without
+Harbormaster's ownership label. Migrating the data of an old volume into the app's data
+directory is something you have to do yourself.
+
+If you move or rename your Harbormaster working directory, the volumes point at the old
+location. Harbormaster notices this and repoints them on the next run. This only rewrites
+Docker's own bookkeeping, your files are never touched.
+
 :::{admonition} Historical note
 :class: warning
 
