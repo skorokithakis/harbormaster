@@ -4,17 +4,25 @@ set -eu
 
 cd "$(dirname "$0")/../"
 
-# Get the version from pyproject.toml. No CI job builds these images; releases are
-# made by hand, so the declared version is the only source of truth. Do not reach for
-# GITHUB_REF_NAME here if this is ever automated: unlike GitLab's CI_COMMIT_TAG, it is
-# also set on branch pushes, and would tag an image `master`.
-# The anchor matters: without it this also matches ruff's `target-version`.
-IMAGE_VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' pyproject.toml)"
+# CI publishes both master and v* tag pushes. Apply a version tag only when HEAD is
+# exactly tagged with a v* release tag; branch pushes and local builds get only
+# :latest and :webhook. Read the tag from git, not GITHUB_REF_NAME (which is also
+# set for branch pushes), and never fall back to the version in pyproject.toml.
+if RELEASE_TAG="$(git describe --tags --exact-match --match 'v*' 2>/dev/null)"; then
+    IMAGE_VERSION="${RELEASE_TAG#v}"
+else
+    IMAGE_VERSION=""
+fi
 IMAGE_BASE=stavros/harbormaster
 
 echo "Building images"
-docker build -f misc/Dockerfile -t "$IMAGE_BASE:$IMAGE_VERSION" -t "$IMAGE_BASE:latest" .
-docker build -f misc/Dockerfile.webhook -t "$IMAGE_BASE:${IMAGE_VERSION}-webhook" -t "$IMAGE_BASE:webhook" .
+if [ -n "$IMAGE_VERSION" ]; then
+    docker build -f misc/Dockerfile -t "$IMAGE_BASE:latest" -t "$IMAGE_BASE:$IMAGE_VERSION" .
+    docker build -f misc/Dockerfile.webhook -t "$IMAGE_BASE:webhook" -t "$IMAGE_BASE:$IMAGE_VERSION-webhook" .
+else
+    docker build -f misc/Dockerfile -t "$IMAGE_BASE:latest" .
+    docker build -f misc/Dockerfile.webhook -t "$IMAGE_BASE:webhook" .
+fi
 
 if [ "${1-}" = "--push" ]; then
     echo "Pushing images"
