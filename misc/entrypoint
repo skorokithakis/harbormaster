@@ -65,8 +65,18 @@ fi
 run-harbormaster
 
 if command -v webhook >/dev/null 2>&1; then
-    echo "Starting webhook server..."
-    webhook -hooks /hooks.json -verbose &
+    # The hook configuration in /hooks.json reads its secret from this variable and
+    # uses it to verify requests. If it is unset (or empty), the hook's value match on
+    # X-Harbormaster-Token would accept any request that sends an empty header, so we
+    # must not start webhook at all. The container keeps running and only its scheduled
+    # cron runs happen, degrading to the plain image.
+    if [ -n "${HARBORMASTER_WEBHOOK_SECRET:-}" ]; then
+        echo "Starting webhook server..."
+        webhook -hooks /hooks.json -template -verbose &
+    else
+        echo "HARBORMASTER_WEBHOOK_SECRET is not set, so the webhook server will not be started."
+        echo "Webhook-triggered runs are disabled; only the scheduled cron runs will happen."
+    fi
 fi
 
 echo "Starting crond..."

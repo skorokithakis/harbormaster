@@ -1,4 +1,7 @@
 FROM stavros/harbormaster:latest
 RUN apk add webhook
 
+# webhook's default listen port.
+EXPOSE 9000
+
 COPY misc/hooks.json /hooks.json

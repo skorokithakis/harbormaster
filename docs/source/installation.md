@@ -37,11 +37,40 @@ If you want to run it immediately at some point, you can use the following comma
 $ docker exec -i -t <container id> /usr/bin/run-harbormaster
 ```
 
-Alternatively you can use `stavros/harbormaster:webhook` which ships with
-[webhook](https://github.com/adnanh/webhook) to trigger updates. The image comes with
-an example configuration but you should mount a custom one to `/hooks.json` with proper
-[rules](https://github.com/adnanh/webhook/blob/master/docs/Hook-Rules.md) for verifying
-the source.
+Alternatively you can use `stavros/harbormaster:webhook`, which is the same image plus
+[webhook](https://github.com/adnanh/webhook), so you can trigger a run over HTTP (for
+example from a GitHub, Gitea or Forgejo webhook). To use it, you must publish webhook's
+port and set a secret:
+
+```bash
+docker run -d \
+    --restart unless-stopped \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v <the path to your config directory>:/config \
+    -v <the path to your Harbormaster working directory>:/main \
+    -p 9000:9000 \
+    -e HARBORMASTER_WEBHOOK_SECRET=<a secret you generate> \
+    stavros/harbormaster:webhook
+```
+
+If `HARBORMASTER_WEBHOOK_SECRET` is unset or empty, the image deliberately refuses to
+start webhook (it logs why and just runs its scheduled updates), so webhook-triggered
+runs only work once you set a secret. The secret authenticates requests in two ways,
+both sent to `http://<host>:9000/hooks/run`:
+
+* As a webhook from GitHub, Gitea or Forgejo: point the provider's webhook at that URL
+  and put the `HARBORMASTER_WEBHOOK_SECRET` value in the provider's "Secret" field.
+  Harbormaster verifies the `X-Hub-Signature-256` header those providers send.
+* By hand or from a script, with an `X-Harbormaster-Token` header:
+
+```bash
+curl -X POST -H "X-Harbormaster-Token: <your secret>" http://<host>:9000/hooks/run
+```
+
+The image comes with the above hook at `/hooks.json`, reading the secret from the
+environment. If you need anything different, mount your own JSON file there with the
+proper [rules](https://github.com/adnanh/webhook/blob/master/docs/Hook-Rules.md) for
+verifying the source; a plain-JSON file works as-is.
 
 
 System installation

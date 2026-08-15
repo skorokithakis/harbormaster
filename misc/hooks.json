@@ -2,6 +2,36 @@
   {
     "id": "run",
     "execute-command": "/usr/bin/run-harbormaster",
-    "command-working-directory": "/src"
+    "trigger-rule-mismatch-http-response-code": 403,
+    "trigger-rule":
+    {
+      "or":
+      [
+        {
+          "match":
+          {
+            "type": "value",
+            "value": "{{ getenv `HARBORMASTER_WEBHOOK_SECRET` | js }}",
+            "parameter":
+            {
+              "source": "header",
+              "name": "X-Harbormaster-Token"
+            }
+          }
+        },
+        {
+          "match":
+          {
+            "type": "payload-hmac-sha256",
+            "secret": "{{ getenv `HARBORMASTER_WEBHOOK_SECRET` | js }}",
+            "parameter":
+            {
+              "source": "header",
+              "name": "X-Hub-Signature-256"
+            }
+          }
+        }
+      ]
+    }
   }
 ]
