@@ -3,9 +3,6 @@ name: release
 on:
   push:
     branches: [master]
-  # For retrying a release that failed after its PR was merged. Release-please
-  # only runs on master pushes, so without this the retry needs an empty commit.
-  workflow_dispatch:
 
 permissions:
   contents: read
