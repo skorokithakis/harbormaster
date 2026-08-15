@@ -1,6 +1,23 @@
 # Changelog
 
 
+## [0.3.5](https://github.com/skorokithakis/harbormaster/compare/v0.3.4...v0.3.5) (2026-08-15)
+
+
+### Features
+
+* Add the manage_volumes option ([e57bd72](https://github.com/skorokithakis/harbormaster/commit/e57bd72f5e84252ffc675623aba1b9c82382eb34))
+* Add the manage_volumes option ([e06b7ab](https://github.com/skorokithakis/harbormaster/commit/e06b7abcaf9dd35e9d3bb8f3674939b9095a328a))
+* Change the cron interval in the Docker container to 10min ([2f73029](https://github.com/skorokithakis/harbormaster/commit/2f730290899272a982f933309ba2821a32ca6d7e))
+* Find an app's Compose file the way Compose does ([c05dab3](https://github.com/skorokithakis/harbormaster/commit/c05dab34d6b84f1ca6b4a6ca5c6be76557ba459a))
+* Print a completion message to the console ([6bfb934](https://github.com/skorokithakis/harbormaster/commit/6bfb9342d425fbf2faa72bf0b4c73d98b076be52))
+
+
+### Bug Fixes
+
+* Don't try to pull buildable images (fixes [#18](https://github.com/skorokithakis/harbormaster/issues/18)) ([cbcba04](https://github.com/skorokithakis/harbormaster/commit/cbcba0434828c001f78dd9c1cc5348808c8a2b48))
+* Run the Docker image entrypoint under dumb-init ([d448f1b](https://github.com/skorokithakis/harbormaster/commit/d448f1b97414b42d92104a326ba4dd5d4d18f03e))
+
 ## v0.3.4 (2023-07-31)
 
 ### Features
@@ -268,5 +285,3 @@
 ### Fixes
 
 * Fetch before trying to check for changes. [Stavros Korokithakis]
-
-
