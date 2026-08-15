@@ -13,7 +13,7 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         # Keep in sync with the test job.
-        python-version: "3.12"
+        python-version: "3.14"
     - uses: pre-commit/action@v3.0.1
       with:
         extra_args: -a --hook-stage manual
@@ -24,12 +24,10 @@ jobs:
     - uses: actions/checkout@v7
     - uses: actions/setup-python@v7
       with:
-        # 3.12 is chosen, not merely the newest that works. 3.13 cannot install
-        # the locked ruamel-yaml-clib 0.2.8 at all: there is no wheel and the C
-        # extension does not build. 3.14 does install, but only because
-        # ruamel.yaml stops requiring the clib there, and the ruff and mypy
-        # versions pinned in .pre-commit-config.yaml predate that interpreter.
-        python-version: "3.12"
+        # 3.14 is the newest interpreter tested successfully with this lock.
+        # ruamel.yaml 0.19.1 no longer has a mandatory ruamel-yaml-clib
+        # dependency, so the old clib-based cap no longer applies.
+        python-version: "3.14"
     - run: pip install poetry
     - run: poetry config virtualenvs.create false
     - run: poetry install --no-root --with dev
