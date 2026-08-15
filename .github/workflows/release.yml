@@ -3,6 +3,10 @@ name: release
 on:
   push:
     branches: [master]
+  # For retrying a release that failed after its PR was merged. Note the retry only
+  # works while nothing under .github/workflows/ has changed since that merge: see
+  # the note on contents/workflows below.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +24,16 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Release-please swaps the 'autorelease: pending' label for 'autorelease:
+      # tagged'. Applying a label needs only pull-requests, but creating one that
+      # does not exist yet needs issues.
+      issues: write
+    # Creating a release whose target commit touches .github/workflows/ relative to
+    # the default branch additionally needs 'workflows: write', which GITHUB_TOKEN
+    # can never hold. Release-please targets the release PR's merge commit, so this
+    # is harmless in the normal flow, where that commit is the branch tip. It bites
+    # only when a release is retried after a workflow file has moved on: the fix is
+    # to land the release first, then change workflows.
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
