@@ -6,7 +6,6 @@
 
 ### Features
 
-* Add the manage_volumes option ([e57bd72](https://github.com/skorokithakis/harbormaster/commit/e57bd72f5e84252ffc675623aba1b9c82382eb34))
 * Add the manage_volumes option ([e06b7ab](https://github.com/skorokithakis/harbormaster/commit/e06b7abcaf9dd35e9d3bb8f3674939b9095a328a))
 * Change the cron interval in the Docker container to 10min ([2f73029](https://github.com/skorokithakis/harbormaster/commit/2f730290899272a982f933309ba2821a32ca6d7e))
 * Find an app's Compose file the way Compose does ([c05dab3](https://github.com/skorokithakis/harbormaster/commit/c05dab34d6b84f1ca6b4a6ca5c6be76557ba459a))
