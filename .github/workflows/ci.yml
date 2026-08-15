@@ -4,7 +4,6 @@ on:
   pull_request:
   push:
     branches: [master]
-    tags: ["v*"]
 
 jobs:
   pre-commit:
@@ -34,18 +33,14 @@ jobs:
     - run: poetry install --no-root --with dev
     - run: pytest
 
+  # Build-only: catches a broken Dockerfile on PRs and master pushes before
+  # release time. Publishing happens in the release workflow.
   docker:
     runs-on: ubuntu-latest
     needs: [test, pre-commit]
-    if: github.event_name == 'push' && github.event.repository.fork == false
     steps:
     - uses: actions/checkout@v7
-      with:
-        fetch-depth: 0
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Build and push Docker images
-      run: misc/docker-build.sh --push
+    - name: Build Docker images
+      # Builds misc/Dockerfile tagged :latest first, because
+      # misc/Dockerfile.webhook builds FROM stavros/harbormaster:latest.
+      run: misc/docker-build.sh

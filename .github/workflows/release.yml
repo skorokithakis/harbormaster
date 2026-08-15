@@ -1,0 +1,64 @@
+name: release
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  # Release-please creates the tag and GitHub release here, on the push that merges
+  # its release PR. The publish jobs below must live in this same workflow, gated on
+  # this job's outputs: GitHub does not fire workflows for events created with
+  # GITHUB_TOKEN, so a separate 'v*' tag-push workflow would never run.
+  release-please:
+    # Forks must not cut releases of their own. Without this, every master push in
+    # a fork opens a release PR there and publishes on merge.
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+    - uses: googleapis/release-please-action@v4
+      id: release
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  pypi:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Trusted publishing: authenticates to PyPI with OIDC, no username/password.
+      id-token: write
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/setup-python@v7
+      with:
+        # Keep in sync with the ci workflow.
+        python-version: "3.14"
+    - run: pip install poetry
+    - run: poetry build
+    - uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true
+
+  docker:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Build and push Docker images
+      run: misc/docker-build.sh --push "${{ needs.release-please.outputs.version }}"

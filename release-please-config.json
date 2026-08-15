@@ -1,0 +1,12 @@
+{
+  "bump-patch-for-minor-pre-major": true,
+  "bump-minor-pre-major": true,
+  "always-update": true,
+  "bootstrap-sha": "c9e90c0bf1669096236738ca55a922fa2d1e7a52",
+  "packages": {
+    ".": {
+      "release-type": "python"
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}

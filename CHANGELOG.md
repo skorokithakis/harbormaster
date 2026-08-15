@@ -1,29 +1,6 @@
 # Changelog
 
 
-## Unreleased
-
-### Changes
-
-* Require Python 3.9 or later. Python 3.8 reached end of life in October 2024. [Stavros Korokithakis]
-
-### Features
-
-* Find an app's Compose file the way Compose does, checking `compose.yaml`, `compose.yml`, `docker-compose.yaml` and `docker-compose.yml`, when `compose_config` is not set. [Stavros Korokithakis]
-
-* Add the `manage_volumes` option, to store an app's named volumes in its data and cache directories. [Stavros Korokithakis]
-
-* Print a completion message to the console. [Stavros Korokithakis]
-
-* Change the cron interval in the Docker container to 10min. [Stavros Korokithakis]
-
-### Fixes
-
-* Don't try to pull buildable images (fixes #18) [Id an]
-
-* Run the Docker image entrypoint under dumb-init. [Stavros Korokithakis]
-
-
 ## v0.3.4 (2023-07-31)
 
 ### Features

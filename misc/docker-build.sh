@@ -4,15 +4,31 @@ set -eu
 
 cd "$(dirname "$0")/../"
 
-# CI publishes both master and v* tag pushes. Apply a version tag only when HEAD is
-# exactly tagged with a v* release tag; branch pushes and local builds get only
-# :latest and :webhook. Read the tag from git, not GITHUB_REF_NAME (which is also
-# set for branch pushes), and never fall back to the version in pyproject.toml.
-if RELEASE_TAG="$(git describe --tags --exact-match --match 'v*' 2>/dev/null)"; then
-    IMAGE_VERSION="${RELEASE_TAG#v}"
-else
-    IMAGE_VERSION=""
-fi
+# The release version is passed in explicitly by the caller; the release workflow
+# takes it from release-please's output. Deriving it here from a git tag is
+# unreliable in that workflow, since the tag is created seconds earlier by another
+# job and isn't present in a fresh checkout. With no version only :latest and
+# :webhook are built, which is the behaviour local, unversioned builds want.
+IMAGE_VERSION=""
+PUSH=0
+for ARG in "$@"; do
+    case "$ARG" in
+        --push)
+            PUSH=1
+            ;;
+        -*)
+            echo "usage: $0 [<version>] [--push]" >&2
+            exit 2
+            ;;
+        *)
+            if [ -n "$IMAGE_VERSION" ]; then
+                echo "usage: $0 [<version>] [--push]" >&2
+                exit 2
+            fi
+            IMAGE_VERSION="$ARG"
+            ;;
+    esac
+done
 IMAGE_BASE=stavros/harbormaster
 
 echo "Building images"
@@ -24,7 +40,7 @@ else
     docker build -f misc/Dockerfile.webhook -t "$IMAGE_BASE:webhook" .
 fi
 
-if [ "${1-}" = "--push" ]; then
+if [ "$PUSH" = 1 ]; then
     echo "Pushing images"
     docker push --all-tags "$IMAGE_BASE"
 fi
