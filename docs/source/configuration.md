@@ -46,8 +46,23 @@ apps:
       app's Compose file declares in its data and cache directories. See
       [managed volumes](managed-volumes). Defaults to `false`.
   - `otherapp`: Another application to deploy.
-    - `compose_config`: The Compose config filename, if it's not `docker-compose.yml`,
-      or if you want to use Harbormaster-specific overrides.
+    - `compose_config`: The Compose config filename, or a list of them, if you want to
+      use Harbormaster-specific overrides or a name that Harbormaster does not look for
+      on its own.
+
+      If you leave this out, Harbormaster looks for the Compose file in the repository
+      itself, checking the same names as Compose, in the same order, and using the first
+      one it finds:
+
+      1. `compose.yaml`
+      2. `compose.yml`
+      3. `docker-compose.yaml`
+      4. `docker-compose.yml`
+
+      Setting `compose_config` turns this off, and the names you give are used as they
+      are. Note that Harbormaster only looks for the four names above, and never adds an
+      override file such as `compose.override.yaml` by itself, so if your app needs more
+      than one file, you must list them all here.
     - `environment_file`: A YAML environment file.
   - `oldapp`: An old application that shouldn't be run.
     - `enabled`: If set to `false`, the app will not be run.

@@ -38,6 +38,22 @@ DEBUG: bool = False
 MAX_GIT_NETWORK_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 10
 
+# The filenames Compose v2 checks, in order, when discovering the Compose file
+# of a project. Harbormaster uses the same order when an app does not set
+# compose_config explicitly. The order matters and must stay Compose's own:
+# Harbormaster used to hardcode docker-compose.yml, so a repo holding both
+# compose.yaml and docker-compose.yml changed which file it runs. Diverging
+# here would mean `docker compose up` in the repo dir and Harbormaster run
+# different files, which is exactly the surprise this list exists to avoid.
+# Compose's override files (compose.override.yaml and friends) are deliberately
+# not here; only one file is ever discovered.
+COMPOSE_DISCOVERY_FILENAMES = (
+    "compose.yaml",
+    "compose.yml",
+    "docker-compose.yaml",
+    "docker-compose.yml",
+)
+
 
 def debug(message: str, force: bool = False) -> None:
     """Print a message if DEBUG is True."""
@@ -516,11 +532,16 @@ class App:
         self.manage_volumes: bool = configuration.get("manage_volumes", False)
         self.managed_volumes: Dict[str, Path] = {}
         self.url: str = configuration["url"]
-        cfn = configuration.get("compose_config", ["docker-compose.yml"])
+        cfn = configuration.get("compose_config", None)
         if isinstance(cfn, str):
             # If the filename is a string, we should turn it into a list.
             cfn = [cfn]
-        self.compose_config: List[str] = cfn
+        # The user-configured names are kept apart from the resolved ones (see
+        # the compose_config property below), and nothing is resolved here: at
+        # construction time the repo may not be cloned yet, so the repo dir may
+        # not exist.
+        self._explicit_compose_config: Optional[List[str]] = cfn
+        self._resolved_compose_config: Optional[List[str]] = None
         self.branch: str = configuration.get("branch", "master")
         self.paths = paths
         self.cache = cache
@@ -614,6 +635,42 @@ class App:
     ) -> int:
         status, stdout = self.ev_run_command_full(command, chdir)
         return _postproc_command_assuming_exitcode0(status, stdout, errmsg)
+
+    @property
+    def compose_config(self) -> List[str]:
+        """
+        Return the Compose filenames for this app, resolved on first access.
+
+        When the user set compose_config, the given names are used verbatim.
+        Otherwise, the Compose file is discovered in the repo directory the
+        way Compose v2 does: COMPOSE_DISCOVERY_FILENAMES is checked in order
+        and the first name that exists wins. Either way, every resulting
+        file must exist in the repo directory, or an error is raised. The
+        result is resolved lazily, after the repo exists, and cached so it
+        stays stable for the whole run.
+        """
+        if self._resolved_compose_config is None:
+            if self._explicit_compose_config is not None:
+                for name in self._explicit_compose_config:
+                    if not (self.paths.repo_dir / name).is_file():
+                        raise Exception(
+                            f'The Compose file "{self.paths.repo_dir / name}" '
+                            f'for app "{self.id}" does not exist.'
+                        )
+                self._resolved_compose_config = list(self._explicit_compose_config)
+            else:
+                for name in COMPOSE_DISCOVERY_FILENAMES:
+                    if (self.paths.repo_dir / name).is_file():
+                        debug(f'Discovered Compose file "{name}" for app "{self.id}".')
+                        self._resolved_compose_config = [name]
+                        break
+                else:
+                    raise Exception(
+                        f'No Compose file found for app "{self.id}" in '
+                        f'"{self.paths.repo_dir}". Searched for: '
+                        f"{', '.join(COMPOSE_DISCOVERY_FILENAMES)}."
+                    )
+        return self._resolved_compose_config
 
     @property
     def compose_config_command(self) -> List[str]:
@@ -951,15 +1008,18 @@ class App:
                 else:
                     click.echo(f"Cloning {self.url} to {self.paths.repo_dir}...")
                     updated = self.clone()
-
-                self._render_config_vars()
-                return updated
             except Exception as e:
                 last_exception = e
+                click.echo(f"Error with git clone/pull request: {last_exception}")
+                click.echo(f"Will retry after {RETRY_WAIT_SECONDS} seconds.")
+                time.sleep(RETRY_WAIT_SECONDS)
+            else:
+                # Rendering (and the Compose file resolution it triggers) is
+                # not a network operation, so its failures must not be reported
+                # as git errors or retried.
+                self._render_config_vars()
+                return updated
 
-            click.echo(f"Error with git clone/pull request: {last_exception}")
-            click.echo(f"Will retry after {RETRY_WAIT_SECONDS} seconds.")
-            time.sleep(RETRY_WAIT_SECONDS)
         raise last_exception
 
 
@@ -1391,7 +1451,18 @@ def test(
         repo_config["replacements"] = options_to_dict(replacement)
 
     if not compose_file:
-        compose_file = (Path("docker-compose.yml").absolute(),)
+        # Discover the Compose file the way Compose v2 does.
+        for name in COMPOSE_DISCOVERY_FILENAMES:
+            candidate = Path(name).absolute()
+            if candidate.is_file():
+                debug(f'Discovered Compose file "{name}" in the current directory.')
+                compose_file = (candidate,)
+                break
+        else:
+            raise click.ClickException(
+                "No Compose file found in the current directory. Searched "
+                f"for: {', '.join(COMPOSE_DISCOVERY_FILENAMES)}."
+            )
 
     # Copy the Compose config files to the working directory and render them.
     config_list = []

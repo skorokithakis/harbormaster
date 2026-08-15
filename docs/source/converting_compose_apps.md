@@ -4,6 +4,18 @@ If you have a Compose app and you want to make sure it integrates with Harbormas
 there are a few things you need to do.
 
 
+## Naming your Compose file
+
+Call your Compose file whatever Compose itself would accept, and Harbormaster will find
+it. It looks for `compose.yaml`, `compose.yml`, `docker-compose.yaml` and
+`docker-compose.yml`, in that order, and uses the first one in the repository.
+
+If your app needs more than one file, Harbormaster will not guess. It never picks up an
+override file such as `compose.override.yaml` on its own, so list every file you want in
+[`compose_config`](configuration), in the order Compose should merge them. Do the same
+if your file has a name that is not in the list above.
+
+
 (handling-data-directories)=
 ## Handling data directories
 

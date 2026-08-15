@@ -399,6 +399,154 @@ def test_manage_volumes_bare_volume_in_two_files_injected_once(tmpdir: Path) -> 
     assert app.managed_volumes == {"myvol": app_paths.data_dir / "myvol"}
 
 
+def _make_compose_test_app(
+    tmpdir: Path, configuration: Optional[Dict[str, Any]] = None
+) -> cli.App:
+    """Return an App whose repo dir exists, for compose-file resolution tests."""
+    tmpdir = Path(tmpdir)
+    paths = Paths.for_workdir(tmpdir, config_dir=tmpdir)
+    paths.create_directories()
+    app_paths = AppPaths.from_paths(paths, "test_app")
+    app_paths.repo_dir.mkdir()
+    app = cli.App(
+        id="test_app",
+        configuration={"url": "https://example.com/repo", **(configuration or {})},
+        paths=app_paths,
+        cache={},
+    )
+    return app
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"],
+)
+def test_compose_file_discovery_finds_each_candidate(
+    tmpdir: Path, filename: str
+) -> None:
+    # Every name in the search order is discovered when it is the only
+    # candidate present, and the discovered name is used consistently,
+    # including on the Compose command line.
+    app = _make_compose_test_app(tmpdir)
+    (app.paths.repo_dir / filename).write_text("services:\n")
+    assert app.compose_config == [filename]
+    assert app.compose_config_command == ["-f", filename]
+
+
+def test_compose_file_discovery_prefers_compose_yaml(tmpdir: Path) -> None:
+    # compose.yaml wins over docker-compose.yml, matching Compose v2, even
+    # though docker-compose.yml is the legacy default name.
+    app = _make_compose_test_app(tmpdir)
+    (app.paths.repo_dir / "docker-compose.yml").write_text("services:\n")
+    (app.paths.repo_dir / "compose.yaml").write_text("services:\n")
+    assert app.compose_config == ["compose.yaml"]
+
+
+def test_compose_file_resolution_is_cached(tmpdir: Path) -> None:
+    # Resolution happens once, after clone/pull, and the result stays stable
+    # for the whole run even if the file disappears later.
+    app = _make_compose_test_app(tmpdir)
+    (app.paths.repo_dir / "compose.yaml").write_text("services:\n")
+    assert app.compose_config == ["compose.yaml"]
+    (app.paths.repo_dir / "compose.yaml").unlink()
+    (app.paths.repo_dir / "docker-compose.yml").write_text("services:\n")
+    assert app.compose_config == ["compose.yaml"]
+
+
+def test_explicit_compose_config_string_used_verbatim(tmpdir: Path) -> None:
+    app = _make_compose_test_app(
+        tmpdir, configuration={"compose_config": "my-compose.yml"}
+    )
+    (app.paths.repo_dir / "my-compose.yml").write_text("services:\n")
+    assert app.compose_config == ["my-compose.yml"]
+    assert app.compose_config_command == ["-f", "my-compose.yml"]
+
+
+def test_explicit_compose_config_list_used_verbatim(tmpdir: Path) -> None:
+    app = _make_compose_test_app(
+        tmpdir,
+        configuration={
+            "compose_config": ["docker-compose.yml", "docker-compose.override.yml"]
+        },
+    )
+    (app.paths.repo_dir / "docker-compose.yml").write_text("services:\n")
+    (app.paths.repo_dir / "docker-compose.override.yml").write_text("services:\n")
+    assert app.compose_config == [
+        "docker-compose.yml",
+        "docker-compose.override.yml",
+    ]
+    assert app.compose_config_command == [
+        "-f",
+        "docker-compose.yml",
+        "-f",
+        "docker-compose.override.yml",
+    ]
+
+
+def test_explicit_compose_config_bypasses_discovery(tmpdir: Path) -> None:
+    # A discoverable compose.yaml must not win over a name the user set.
+    app = _make_compose_test_app(tmpdir, configuration={"compose_config": "custom.yml"})
+    (app.paths.repo_dir / "custom.yml").write_text("services:\n")
+    (app.paths.repo_dir / "compose.yaml").write_text("services:\n")
+    assert app.compose_config == ["custom.yml"]
+
+
+def test_missing_explicit_compose_file_raises(tmpdir: Path) -> None:
+    app = _make_compose_test_app(tmpdir, configuration={"compose_config": "nope.yml"})
+    with pytest.raises(Exception) as exc_info:
+        _ = app.compose_config
+    # The error names the app and the missing path.
+    message = str(exc_info.value)
+    assert "test_app" in message
+    assert "nope.yml" in message
+
+
+def test_missing_explicit_compose_file_in_list_raises(tmpdir: Path) -> None:
+    app = _make_compose_test_app(
+        tmpdir,
+        configuration={"compose_config": ["docker-compose.yml", "override.yml"]},
+    )
+    (app.paths.repo_dir / "docker-compose.yml").write_text("services:\n")
+    with pytest.raises(Exception) as exc_info:
+        _ = app.compose_config
+    message = str(exc_info.value)
+    assert "test_app" in message
+    assert "override.yml" in message
+
+
+def test_no_compose_file_raises_with_search_list(tmpdir: Path) -> None:
+    app = _make_compose_test_app(tmpdir)
+    with pytest.raises(Exception) as exc_info:
+        _ = app.compose_config
+    # The error names the app and every searched filename.
+    message = str(exc_info.value)
+    assert "test_app" in message
+    for name in (
+        "compose.yaml",
+        "compose.yml",
+        "docker-compose.yaml",
+        "docker-compose.yml",
+    ):
+        assert name in message
+
+
+def test_missing_compose_file_skips_git_retry(tmpdir: Path, capsys: Any) -> None:
+    # A missing Compose file is not a network problem: it must not be
+    # reported as a git failure, and it must not be retried with sleeps.
+    app = _make_compose_test_app(tmpdir)
+    with patch.object(cli.App, "is_repo", return_value=True):
+        with patch.object(cli.App, "pull", return_value=False):
+            with patch("docker_harbormaster.cli.time.sleep") as mock_sleep:
+                with pytest.raises(Exception) as exc_info:
+                    app.clone_or_pull()
+    mock_sleep.assert_not_called()
+    output = capsys.readouterr().out
+    assert "Error with git clone/pull request" not in output
+    message = str(exc_info.value)
+    assert "test_app" in message
+    assert "compose.yaml" in message
+
+
 def _make_managed_app(tmpdir: Path) -> cli.App:
     tmpdir = Path(tmpdir)
     paths = Paths.for_workdir(tmpdir, config_dir=tmpdir)

@@ -9,6 +9,8 @@
 
 ### Features
 
+* Find an app's Compose file the way Compose does, checking `compose.yaml`, `compose.yml`, `docker-compose.yaml` and `docker-compose.yml`, when `compose_config` is not set. [Stavros Korokithakis]
+
 * Add the `manage_volumes` option, to store an app's named volumes in its data and cache directories. [Stavros Korokithakis]
 
 * Print a completion message to the console. [Stavros Korokithakis]
