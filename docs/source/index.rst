@@ -18,6 +18,11 @@ Harbormaster is a small container orchestrator that lets you run multiple Docker
 applications on a single host, with automatic deploys/restarts, simply by pushing to a
 git repo.
 
+If you want an LLM to set up your Harbormaster app for you, point it at
+https://harbormaster.readthedocs.io/en/latest/llms.txt. That file is a single-page
+guide to everything an agent needs to write your configuration and convert your
+Compose app.
+
 
 Running your first app
 ----------------------
@@ -61,7 +66,7 @@ inside.
 Now, visit http://localhost:8000, and Harbormaster will greet you.
 
 You can press Ctrl-C to stop Harbormaster, and ``docker stop <container id>`` to stop
-the app. You will notice that Harbormaster has created various directories (``cache``,
+the app. You will notice that Harbormaster has created various directories (``caches``,
 ``data``, ``repos``) in your directory. That's where Harbormaster stores everything.
 
 
@@ -91,7 +96,7 @@ a config file:
 
     apps:
       myapp:
-        url: github.com/yourusername/myapp.git
+        url: https://github.com/yourusername/myapp.git
 
 Harbormaster will look at its config file, clone the ``myapp`` repo, and run ``docker
 compose up`` on it. Harbormaster will run periodically, pull the repo, and restart your
@@ -104,31 +109,11 @@ runs your apps.
 What about my data, though?
 ---------------------------
 
-Excellent question, your application has data you want to persist. For tidiness,
-Harbormaster provides its own mountpoint where you should persist the data (for more
-information on this, see :ref:`the handling data directories section <handling-data-directories>`).
+Excellent question, your application has data you want to persist. Harbormaster
+provides its own directories for that, and it can manage the named volumes in your
+Compose file so that they are stored there.
 
-All you need to do, is change your app's Compose file to mount the ``app_data``
-directory into the Harbormaster-provided directory instead:
-
-.. code-block:: yaml
-
-    services:
-      main:
-        build: .
-        volumes:
-          - ${HM_DATA_DIR}/data:/app_data
-        ports:
-          - 8080:8080
-        restart: unless-stopped
-
-Harbormaster will ensure ``${HM_DATA_DIR}`` expands to ``harbormaster-main/data/myapp``,
-so all your apps' data will be stored neatly under ``harbormaster-main/data/myapp/data``.
-You don't have to mount the volume under ``/data``, you can mount it directly to
-``${HM_DATA_DIR}`` if you want. You can also use as many mounts as you want, just make
-sure each is a different subdirectory.
-
-For example:
+Declare plain named volumes, the way any Compose app would:
 
 .. code-block:: yaml
 
@@ -136,21 +121,37 @@ For example:
       main:
         build: .
         volumes:
-          - ${HM_DATA_DIR}/data:/app_data
-          - ${HM_DATA_DIR}/other_data:/more_data
-          - ${HM_CACHE_DIR}/some_cache:/cache1
-          - ${HM_CACHE_DIR}/some_other_cache:/cache2
+          - app-data:/app_data
         ports:
           - 8080:8080
         restart: unless-stopped
 
-You can do this with any variable, there's no magic (the variables above just
-straight-up expand to a dir name).
+    volumes:
+      app-data:
 
-If you'd rather keep your Compose file free of Harbormaster variables, you can set
-``manage_volumes: true`` for the app and declare plain named volumes instead.
-Harbormaster will store them in the same directories for you. See :ref:`managed volumes
-<managed-volumes>`.
+Then set ``manage_volumes: true`` for the app in your Harbormaster config file:
+
+.. code-block:: yaml
+
+    apps:
+      myapp:
+        url: https://github.com/yourusername/myapp.git
+        manage_volumes: true
+
+Harbormaster backs the ``app-data`` volume with the directory
+``data/myapp/app-data``, inside its working directory, so all your apps' data ends up
+neatly under a single directory that you can back up. A volume whose name starts with
+``cache-`` goes under ``caches/`` instead, which is where you put data you don't need
+to keep. You can declare as many volumes as you want.
+
+Your Compose file stays an ordinary Compose file, so running ``docker compose logs``
+(or any other Compose command) by hand in the repository directory works with nothing
+extra to set up.
+
+Enabling ``manage_volumes`` is strongly recommended. There is also an older approach,
+which writes ``${HM_DATA_DIR}`` into the Compose file itself; it still works, but new
+apps should not use it. Both are described in :ref:`the handling data section
+<handling-data-directories>`.
 
 Now you can read on about :doc:`how to install Harbormaster <installation>`.
 

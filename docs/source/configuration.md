@@ -11,6 +11,7 @@ apps:
   myapp:
     url: https://github.com/someuser/somerepo.git
     branch: main
+    manage_volumes: true
     environment:
       FOO: bar
       MYVAR: 1
@@ -35,16 +36,18 @@ apps:
 - `apps`: A list of applications to deploy.
   - `myapp`: The name of the application. It can be anything you want.
     - `url`: The git repository URL to clone.
-    - `branch`: The branch to deploy.
+    - `branch`: The branch to deploy. Defaults to `master`, so set this if your
+      repository uses `main`.
     - `environment`: The environment variables to run Compose with.
     - `environment_file`: A file to load environment variables from. The file must
       consist of lines in the form of key=value. The filename is relative to the
-      Harbormaster config file (this file). The file can also be a YAML file with the
-      .yml extension, containing a single YAML collection of string values. Variables in
-      the `environment` key take precedence over variables in the file.
+      Harbormaster config file (this file). The file can also be a YAML file, with
+      a .yml or .yaml extension, containing a single YAML collection of string values.
+      Variables in the `environment` key take precedence over variables in the file.
     - `manage_volumes`: If set to `true`, Harbormaster stores the named volumes that the
       app's Compose file declares in its data and cache directories. See
-      [managed volumes](managed-volumes). Defaults to `false`.
+      [managed volumes](managed-volumes). Defaults to `false`, but enabling it is
+      strongly recommended, and it is the way new apps should mount their data.
   - `otherapp`: Another application to deploy.
     - `compose_config`: The Compose config filename, or a list of them, if you want to
       use Harbormaster-specific overrides or a name that Harbormaster does not look for

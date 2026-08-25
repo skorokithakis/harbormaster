@@ -1,0 +1,271 @@
+# Harbormaster: a guide for LLM agents
+
+This is a single-page reference for an agent that sets up a Harbormaster deployment, or
+converts a Docker Compose app to run under Harbormaster. It is complete enough to work
+from on its own. Full documentation: https://harbormaster.readthedocs.io/
+
+
+## What Harbormaster is
+
+Harbormaster runs several Docker Compose apps on one host. You give it a YAML file that
+lists git repositories, each containing a Compose app. It clones them, runs `docker
+compose up` on each one, and restarts an app when its repository or its configuration
+changes.
+
+It is not a daemon. The operator runs `harbormaster run` on a timer (cron, a systemd
+timer, or the bundled container). Each run brings every app to its desired state and
+exits.
+
+Harbormaster does not provide ingress, a reverse proxy, TLS, or DNS. If the app needs to
+be reachable from outside, that is the operator's job. It also does not schedule across
+hosts; everything runs on the machine where it is invoked.
+
+
+## The working directory
+
+Harbormaster keeps everything under one directory, so that the whole deployment can be
+backed up and restored as a unit:
+
+- `harbormaster.yml` - the configuration file. It may live elsewhere, see `-c`.
+- `repos/<app_id>/` - the app's git checkout. Harbormaster owns this; do not edit files
+  here, they are overwritten on the next pull.
+- `data/<app_id>/` - data to keep. Never deleted. When an app is removed from the
+  config, this is moved to `archives/<app_id>-<timestamp>`.
+- `caches/<app_id>/` - data that can be thrown away. Deleted when the app is removed
+  from the config. Note the directory is `caches`, plural.
+- `archives/` - the data directories of removed apps.
+- `.harbormaster.cache` - internal state, used to notice configuration changes.
+
+`<app_id>` is the key you give the app in the config file.
+
+
+## The configuration file
+
+```yaml
+config:
+  prune: false
+apps:
+  myapp:
+    url: https://github.com/someuser/myapp.git
+    branch: main
+    manage_volumes: true
+    environment:
+      TZ: Europe/Athens
+    environment_file: secrets/myapp.txt
+  otherapp:
+    url: https://github.com/someuser/otherapp.git
+    manage_volumes: true
+    compose_config:
+      - docker-compose.yml
+      - docker-compose.harbormaster.yml
+  oldapp:
+    enabled: false
+    url: https://github.com/someuser/oldapp.git
+```
+
+Top level:
+
+- `config.prune` (bool, default `false`) - run `docker system prune --all --force` after
+  the run. This deletes every unused image on the host, not only Harbormaster's. Leave
+  it off unless the operator asks for it.
+
+Per app:
+
+- `url` (string, **required**) - the git URL to clone.
+- `branch` (string, default `master`) - the branch to deploy. The default is `master`,
+  not `main`, so set this explicitly for any repository that uses `main`.
+- `enabled` (bool, default `true`) - if `false`, the app is stopped and not pulled.
+- `manage_volumes` (bool, default `false`) - let Harbormaster back the app's named
+  volumes with directories in `data/` and `caches/`. **Strongly recommended: set this to
+  `true`.** See "Volumes" below.
+- `compose_config` (string or list of strings) - the Compose file(s) inside the
+  repository, relative to its root, in the order Compose should merge them. If omitted,
+  Harbormaster discovers one file, see "Finding the Compose file".
+- `environment` (mapping) - environment variables for the Compose run. Values are
+  converted to strings, so quote anything that YAML would read as a number, bool or
+  date.
+- `environment_file` (string) - a file to read more environment variables from, relative
+  to the directory holding the Harbormaster config file, not the repository. A `.yml` or
+  `.yaml` extension means the file is a YAML mapping of strings to strings; any other
+  extension means `key=value` lines. Plain files do not support comments: a line without
+  an `=` is a fatal error. Keys in `environment` win over keys in the file. Both lose to
+  `HM_DATA_DIR`, `HM_CACHE_DIR` and `HM_REPO_DIR`, which Harbormaster always sets itself.
+- `replacements`, `replacements_file` - legacy template variables. They still work. Do
+  not use them in new configurations.
+
+Two apps may use the same `url`, with different branches or different
+`compose_config` values. The app id, not the URL, identifies an app.
+
+An app is stopped and started again when its repository has new commits, or when
+anything in its config stanza changes (including its environment). Otherwise it is left
+running.
+
+
+## Finding the Compose file
+
+If `compose_config` is not set, Harbormaster looks in the repository root for
+`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, in that
+order, and uses the first one it finds. Discovery resolves to exactly one file.
+Harbormaster never picks up an override file such as `compose.override.yaml` by itself.
+
+An app that needs more than one file must list every file in `compose_config`, in merge
+order. The same applies to a file whose name is not in the list above.
+
+
+## Volumes
+
+Set `manage_volumes: true` and declare plain named volumes. This is the recommended way
+to mount an app's data:
+
+```yaml
+services:
+  main:
+    image: myapp
+    volumes:
+      - config:/config
+      - cache-transcode:/transcode
+
+volumes:
+  config:
+  cache-transcode:
+```
+
+Harbormaster rewrites the volume definitions in its checkout of this file, so each
+volume is backed by a directory on the host:
+
+- `config` is backed by `data/myapp/config`.
+- `cache-transcode` is backed by `caches/myapp/cache-transcode`, because the name starts
+  with `cache-`. Every other name goes under `data/`.
+
+The Compose file stays valid Compose, so a manual `docker compose logs` or `docker
+compose up` works in the repository directory with no Harbormaster variables to set
+first. Pass the same `-f` files that the app's `compose_config` lists, and any variables
+from its `environment`, if you need the manual command to match Harbormaster's exactly.
+
+Rules to respect when writing the Compose file:
+
+- A managed volume's name becomes a directory name. Use plain names. A name containing
+  `/` or `\`, or a name that is `.` or `..`, makes Harbormaster refuse to start the app.
+- A volume that declares its own `driver`, `driver_opts`, `external` or `name` is left
+  untouched. Use that to opt a single volume out.
+- Do not add `container_name` to any service. Harbormaster finds an app's containers
+  through Compose, and a fixed container name can stop it from restarting the app.
+
+Turning `manage_volumes` on for an app that is **already running** with plain named
+volumes does not migrate the old data. Docker keeps that data under its own name,
+`<project>_<volume>`, while Harbormaster creates and mounts fresh directories, so the
+app normally comes up empty and unwarned. Moving the data is a manual job. Harbormaster
+only refuses to start if a volume named exactly `hm_<app_id>_<volume>` already exists
+without its own `com.harbormaster.app` label. For a new app there is nothing to migrate.
+
+### The older approach
+
+Before managed volumes, apps mounted Harbormaster's directories by writing its paths
+into the Compose file. These variables are always set in the Compose environment:
+
+- `${HM_DATA_DIR}` - the app's directory under `data/`.
+- `${HM_CACHE_DIR}` - the app's directory under `caches/`.
+- `${HM_REPO_DIR}` - the app's checkout under `repos/`.
+
+```yaml
+    volumes:
+      - ${HM_DATA_DIR}/my_data:/some_data_dir
+      - ${HM_CACHE_DIR}/my_cache:/some_cache_dir
+```
+
+This still works and is not going away, but do not write new apps this way. The drawback
+is that any Compose command run by hand then needs those variables set. Managed volumes
+exist to avoid that.
+
+`${HM_REPO_DIR}` is the exception: managed volumes have no equivalent, so it stays the
+way to mount the app's own repository into a container. It is rarely needed.
+
+
+## Commands
+
+`harbormaster run` - bring every app to its desired state, then exit.
+
+- `-c`, `--config PATH` - the configuration file. Default `harbormaster.yml`.
+- `-d`, `--working-dir PATH` - the directory holding `repos/`, `data/` and the rest.
+  Default `.`.
+- `-f`, `--force-restart` - restart every app, even unchanged ones.
+
+When a run starts an app, it does `docker compose pull --ignore-buildable` and then
+`docker compose up --remove-orphans --build --detach`, in the app's checkout, with `-f`
+for each of the app's Compose files. An app that is running and unchanged is left alone,
+so most runs issue no Compose commands for it at all.
+
+`harbormaster test` - run the Compose app in the current directory, without a
+Harbormaster config file and without committing anything. Use it to check a conversion.
+
+- `-d`, `--working-dir PATH` - where to put the data and cache directories. Defaults to
+  a fresh temporary directory.
+- `-c`, `--compose-file PATH` - the Compose file to use. Repeatable. If omitted, the
+  file is discovered as described above.
+- `-e`, `--environment KEY=VALUE` - an environment variable. Repeatable.
+- `-v`, `--environment-file PATH` - an environment file.
+
+Test mode does not turn on managed volumes, so an app that relies on them runs with
+ordinary Docker named volumes under `harbormaster test`. It checks the Compose file and
+the app, not Harbormaster's volume rewriting.
+
+`harbormaster --debug run` prints what it is doing, including the resolved Compose
+files.
+
+
+## Worked example
+
+The app's repository, `docker-compose.yml`:
+
+```yaml
+services:
+  main:
+    image: ghcr.io/someuser/myapp:latest
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+    environment:
+      - APP_SECRET
+    volumes:
+      - config:/config
+      - cache-thumbnails:/thumbnails
+
+volumes:
+  config:
+  cache-thumbnails:
+```
+
+The deployment repository, `harbormaster.yml`:
+
+```yaml
+apps:
+  myapp:
+    url: https://github.com/someuser/myapp.git
+    branch: main
+    manage_volumes: true
+    environment_file: secrets/myapp.txt
+```
+
+`secrets/myapp.txt`, next to `harbormaster.yml`:
+
+```
+APP_SECRET=replace-me
+```
+
+Result: the app is checked out to `repos/myapp/`, its config lives in `data/myapp/config`
+and its thumbnails in `caches/myapp/cache-thumbnails`. Both are plain host directories.
+
+
+## Checklist before you finish
+
+- `manage_volumes: true` is set, and the Compose file uses plain named volumes.
+- `branch` is set if the repository does not use `master`.
+- No service declares `container_name`.
+- Every Compose file is listed in `compose_config` if there is more than one.
+- Volume names are plain, and cache-only volumes start with `cache-`.
+- `environment_file` paths are relative to the Harbormaster config file, and plain
+  (non-YAML) ones contain no comment lines.
+- Secrets are not written into `harbormaster.yml` if the deployment repository is shared.
+- When several Compose files are merged, later files win. Where a service in a later
+  file must mount somewhere else, declaring a separate volume and pointing the app's
+  command at it is clearer than relying on the merge.

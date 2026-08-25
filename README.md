@@ -15,6 +15,11 @@ updating/restarting the apps when the repositories change.
 Please [visit the documentation](https://harbormaster.readthedocs.io/en/latest/) for
 more details.
 
+If you want an LLM to set up your Harbormaster app for you, point it at
+[llms.txt](https://harbormaster.readthedocs.io/en/latest/llms.txt). That file is
+a single-page guide with everything an agent needs to write your configuration and
+convert your Compose app.
+
 
 ## Rationale
 

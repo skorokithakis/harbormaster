@@ -11,7 +11,7 @@ To make this much, *much* easier, Harbormaster includes a `harbormaster test` co
 
 ## The `test` command
 
-The `harbormaster test` command creates a temporary directory for data/cache/etc
+The `harbormaster test` command creates a temporary directory for the data/caches/etc
 directories, and runs the Compose files directly from your local directory. This
 eliminates the need to commit to your app, or to write a Harbormaster configuration
 file for testing purposes.

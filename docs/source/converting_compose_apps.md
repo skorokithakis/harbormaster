@@ -17,57 +17,30 @@ if your file has a name that is not in the list above.
 
 
 (handling-data-directories)=
-## Handling data directories
+## Handling data
 
-Due to the way Compose files work, you need to do some extra work to properly
-tell Harbormaster about your volumes.
+Harbormaster keeps your apps' data in two kinds of directory, both under the main
+working directory.
 
-Harbormaster provides two kinds of directories: Data and cache.
+**Data** is anything you want to keep. Data directories are never deleted. If you remove
+an app later on, its data directory is moved under the `archives/` directory and renamed
+to `<appname>-<deletion date>`.
 
-**Data** is anything that you want to keep. Data directories will never be deleted,
-if you remove an app later on, its corresponding data directory will be moved
-under the `archives/` directory and renamed to `<appname>-<deletion date>`.
+**Cache** is anything you don't care about. When you remove an app from the config, its
+cache directory is deleted. Harbormaster does nothing else special with it, the point of
+the separation is that you can back up `data/` and skip `caches/`.
 
-**Cache** is anything you don't care about. When you remove an app from the config,
-the cache dir is deleted.
-
-Harbormaster provides some environment variables you can use in your Compose file to
-allow mounting these directories as volumes.
-
-* `${HM_DATA_DIR}` - The app's data that you want to persist. Will be stored in the
-  `data/` directory, under the main Harbormaster working directory.
-* `${HM_CACHE_DIR}` - Any data you don't want to keep. Will be stored in the `cache/`
-  directory, under the main Harbormaster working directory. Harbormaster doesn't do
-  anything special with this directory, the separation between `data/` and `cache/` is
-  just in case you want to separate data into a directory you want to back up and one
-  you don't.
-* `${HM_REPO_DIR}` - The app's repository. Use this if you want to mount the app's
-  directory itself, for example to access some of the repo's files that you don't want
-  to copy into the container.
-
-Compose will replace them with the proper directory names (without trailing slashes), so
-the `volumes` section of your Compose file in your repository should look something like
-this:
-
-```yaml
-volumes:
-  - ${HM_DATA_DIR}/my_data:/some_data_dir
-  - ${HM_DATA_DIR}/foo:/home/foo
-  - ${HM_CACHE_DIR}/my_cache:/some_cache_dir
-```
-
-One issue here might be that, if you try to run a Compose command (e.g. `docker compose
-logs`), Compose might complain that those variables are not set. In that case, you will
-have to set them yourself (possibly to something generic, since they don't always
-matter).
+There are two ways to point your app's volumes at these directories. Managed volumes are
+the recommended one, and are described next. The older approach, which writes
+Harbormaster's paths into the Compose file with environment variables, is described
+further down, and still works.
 
 
 (managed-volumes)=
 ## Managed volumes
 
-If you don't want to sprinkle `${HM_DATA_DIR}` all over your Compose file, Harbormaster
-can manage your named volumes for you instead. Add `manage_volumes: true` to the app in
-your Harbormaster config file:
+Enabling managed volumes is strongly recommended. Add `manage_volumes: true` to the app
+in your Harbormaster config file:
 
 ```yaml
 apps:
@@ -93,24 +66,27 @@ volumes:
 ```
 
 Harbormaster rewrites each of these volumes so that it is backed by a directory on the
-host, exactly like the bind mounts above. `config` will live in
-`data/myapp/config`, and `cache-transcode` will live in `caches/myapp/cache-transcode`.
-Volumes whose name starts with `cache-` go to the cache directory, everything else goes
-to the data directory.
+host. `config` will live in `data/myapp/config`, and `cache-transcode` will live in
+`caches/myapp/cache-transcode`. Volumes whose name starts with `cache-` go to the cache
+directory, everything else goes to the data directory.
 
 The upshot is that your Compose file stays a normal Compose file. You can run `docker
-compose logs` (or any other command) without setting any environment variables, and the
-data is still in a plain directory you can back up, exactly as before. Data directories
-are archived when you remove the app, and cache directories are deleted, just like with
-`${HM_DATA_DIR}` and `${HM_CACHE_DIR}`.
+compose logs` (or any other command) in the repository directory without setting any
+environment variables first. Your data is still in a plain directory you can back up.
+Data directories are archived when you remove the app, and cache directories are
+deleted.
 
 Harbormaster leaves alone any volume that declares its own `driver`, `driver_opts`,
 `external` or `name` key, so you can still opt individual volumes out.
 
+A managed volume's name is used as a directory name, so it must be a plain name.
+Harbormaster refuses to start an app whose managed volume name contains a path
+separator, or is `.` or `..`.
+
 ### Migrating to managed volumes
 
-If you name a volume the same as the directory you used before, it points at the same
-place, so there's nothing to move. These two are equivalent:
+If you name a volume the same as the directory you used with `${HM_DATA_DIR}` before, it
+points at the same place, so there's nothing to move. These two are equivalent:
 
 ```yaml
     volumes:
@@ -136,8 +112,58 @@ Harbormaster's ownership label. Migrating the data of an old volume into the app
 directory is something you have to do yourself.
 
 If you move or rename your Harbormaster working directory, the volumes point at the old
-location. Harbormaster notices this and repoints them on the next run. This only rewrites
-Docker's own bookkeeping, your files are never touched.
+location. Harbormaster notices this and repoints them on the next run, by deleting the
+stale volume record so that Compose recreates it. Only Docker's own bookkeeping is
+rewritten, your files are never touched. Docker refuses to delete a record that a
+container still holds, so if the app is still running, Harbormaster stops with an error
+telling you to run `docker compose down` in the app's repo directory first.
+
+
+## Mounting the repository
+
+Sometimes you want the app's repository itself inside the container, for example to read
+a file from the repo without copying it into the image. Harbormaster sets
+`${HM_REPO_DIR}` to the app's checkout for that:
+
+```yaml
+    volumes:
+      - ${HM_REPO_DIR}/scripts:/scripts
+```
+
+Managed volumes have no equivalent for this, so `${HM_REPO_DIR}` is the way to do it. It
+is not needed often.
+
+
+## The older approach: path variables
+
+Before managed volumes existed, you mounted Harbormaster's directories by writing its
+paths into your Compose file with environment variables. This still works, and there are
+no plans to remove it, but new apps should use managed volumes instead.
+
+Harbormaster sets these variables when it runs Compose:
+
+* `${HM_DATA_DIR}` - The app's data that you want to persist. Stored in the `data/`
+  directory, under the main Harbormaster working directory.
+* `${HM_CACHE_DIR}` - Any data you don't want to keep. Stored in the `caches/`
+  directory, under the main Harbormaster working directory.
+* `${HM_REPO_DIR}` - The app's repository, as described above.
+
+Compose replaces them with the proper directory names (without trailing slashes), so the
+`volumes` section of your Compose file looks something like this:
+
+```yaml
+volumes:
+  - ${HM_DATA_DIR}/my_data:/some_data_dir
+  - ${HM_DATA_DIR}/foo:/home/foo
+  - ${HM_CACHE_DIR}/my_cache:/some_cache_dir
+```
+
+Each mount should be a different subdirectory. You can also mount `${HM_DATA_DIR}`
+itself, if the app only needs one directory.
+
+The drawback, and the reason managed volumes exist, is that if you run a Compose command
+by hand (e.g. `docker compose logs`), Compose complains that those variables are not
+set, and you have to set them yourself, possibly to something meaningless.
 
 :::{admonition} Historical note
 :class: warning
@@ -154,10 +180,11 @@ and does not need two different lists of variables (environment variables and
 replacements variables), we can just use environment variables for everything.
 
 As of this writing, Harbormaster actually supports **both** approaches, and using
-replacements will work fine (Harbormaster just inserts all the replacements variables
-into the enviroment as well), even though this documentation only mentions the
-"environment variable" approach, as I got too excited about it and decided to only
-mention that as the way forward.
+replacements will work fine (a variable `FOO` under the `replacements` key is written
+into the YAML wherever you put `{{ HM_FOO }}`), even though this documentation only
+mentions the "environment variable" approach, as I got too excited about it and decided
+to only mention that as the way forward. Do note that the two lists stay separate:
+replacements are not added to the environment, so `${FOO}` will not see them.
 
 In reality, however, after trying it for a bit, it appears to be much more awkward than
 replacements. With replacements, all the required data is already in the YAML file, and
@@ -173,4 +200,7 @@ select one or the other.
 Thank you for reading my inane ramblings!
 
 Stavros
+
+*(Later note: managed volumes are the answer to this complaint. The paths are in the
+Compose file, as with replacements, but the file stays valid Compose.)*
 :::
