@@ -1,6 +1,27 @@
 # Changelog
 
 
+## [0.4.0](https://github.com/skorokithakis/harbormaster/compare/v0.3.5...v0.4.0) (2026-09-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* the webhook image no longer triggers runs unless HARBORMASTER_WEBHOOK_SECRET is set and requests authenticate with it. Existing deployments keep running on their schedule, but their trigger stops working until they set the secret and sign or authenticate their requests.
+
+### Features
+
+* Require a secret to trigger the webhook image ([73826aa](https://github.com/skorokithakis/harbormaster/commit/73826aa11818f80c091da075416e27a48a9f9329))
+
+
+### Bug Fixes
+
+* Install buildx in the Docker image ([92bf8b5](https://github.com/skorokithakis/harbormaster/commit/92bf8b5b12bf62f489558103a6f0448beabd3862))
+
+
+### Documentation
+
+* Add a Harbormaster guide for LLM agents ([f20bce3](https://github.com/skorokithakis/harbormaster/commit/f20bce3050ce57a26c11ba47e4cdf90268bc9aff))
+
 ## [0.3.5](https://github.com/skorokithakis/harbormaster/compare/v0.3.4...v0.3.5) (2026-08-15)
 
 
