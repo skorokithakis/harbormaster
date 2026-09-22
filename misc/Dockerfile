@@ -1,6 +1,9 @@
 FROM python:3-alpine
 
-RUN apk add bash docker-cli docker-cli-compose dumb-init git openssh git-crypt && \
+# buildx, because without it Compose falls back to the legacy builder, which does not
+# set BuildKit's automatic build args ($BUILDPLATFORM and friends) and so cannot
+# build many current Dockerfiles.
+RUN apk add bash docker-cli docker-cli-buildx docker-cli-compose dumb-init git openssh git-crypt && \
     mkdir /main /config
 
 # We need this so git doesn't block us from operations. Hopefully it doesn't enable any
