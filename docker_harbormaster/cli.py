@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import strftime
 from typing import Any
@@ -37,6 +38,10 @@ DEBUG: bool = False
 
 MAX_GIT_NETWORK_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 10
+# All app repos are on GitHub, which throttles many parallel SSH connections
+# coming from a single IP, so the git fetches run through a bounded pool rather
+# than one worker per app.
+MAX_PARALLEL_FETCHES = 10
 
 # The filenames Compose v2 checks, in order, when discovering the Compose file
 # of a project. Harbormaster uses the same order when an app does not set
@@ -410,8 +415,11 @@ def _run_command_full(
     if environment:
         env.update(environment)
 
-    wd = os.getcwd()
-    os.chdir(chdir)
+    # We pass the working directory to Popen instead of calling os.chdir(),
+    # because the process-wide cwd is shared across the threads that run the
+    # git fetches, and changing it there would race. The shell still starts
+    # with `cd <chdir>;` below, which the container symlink trick needs.
+    #
     # We concatenate the command here instead of just passing it to Popen, because the
     # Harbormaster container (the way to deploy HM) uses a symlink inside with the same
     # name as the host directory (to make the paths inside the container match up with
@@ -437,6 +445,7 @@ def _run_command_full(
         stderr=subprocess.STDOUT,
         env=env,
         shell=True,
+        cwd=chdir,
     )
 
     stdout_list: List[bytes] = []
@@ -453,7 +462,6 @@ def _run_command_full(
     returncode = process.wait()
     stdout = b"".join(stdout_list)
     debug(f"Return code: {returncode}")
-    os.chdir(wd)
     return (returncode, stdout)
 
 
@@ -1003,15 +1011,21 @@ class App:
         for _ in range(MAX_GIT_NETWORK_ATTEMPTS):
             try:
                 if self.is_repo():
-                    click.echo(f"Pulling {self.url} to {self.paths.repo_dir}...")
+                    click.echo(
+                        f"{self.id}: Pulling {self.url} to {self.paths.repo_dir}..."
+                    )
                     updated = self.pull()
                 else:
-                    click.echo(f"Cloning {self.url} to {self.paths.repo_dir}...")
+                    click.echo(
+                        f"{self.id}: Cloning {self.url} to {self.paths.repo_dir}..."
+                    )
                     updated = self.clone()
             except Exception as e:
                 last_exception = e
-                click.echo(f"Error with git clone/pull request: {last_exception}")
-                click.echo(f"Will retry after {RETRY_WAIT_SECONDS} seconds.")
+                click.echo(
+                    f"{self.id}: Error with git clone/pull request: {last_exception}"
+                )
+                click.echo(f"{self.id}: Will retry after {RETRY_WAIT_SECONDS} seconds.")
                 time.sleep(RETRY_WAIT_SECONDS)
             else:
                 # Rendering (and the Compose file resolution it triggers) is
@@ -1064,6 +1078,22 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
     This is the main function that loads the configuration the file and starts/stops
     apps as needed.
     """
+    # The git clones/pulls are network-bound, so they all run first, in a
+    # bounded pool. Only enabled apps are fetched, as before. The Docker steps
+    # remain serial, in config order, because they are heavy and mostly local.
+    fetch_results: Dict[App, Union[bool, Exception]] = {}
+    enabled_apps = [app for app in configuration.apps if app.enabled]
+    if enabled_apps:
+        with ThreadPoolExecutor(max_workers=MAX_PARALLEL_FETCHES) as executor:
+            futures = {app: executor.submit(app.clone_or_pull) for app in enabled_apps}
+            for app, future in futures.items():
+                try:
+                    fetch_results[app] = future.result()
+                except Exception as e:
+                    # The failure is reported in the per-app loop below, so one
+                    # app's failure never stops the others from being fetched.
+                    fetch_results[app] = e
+
     successes = []
     cache = {"version": 1}
     for app in configuration.apps:
@@ -1071,7 +1101,12 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
         click.echo(f"Updating {app.id} ({app.branch})...")
         try:
             if app.enabled:
-                updated_repo = app.clone_or_pull()
+                fetch_result = fetch_results[app]
+                if isinstance(fetch_result, Exception):
+                    # This app's fetch failed in phase 1; report it like any
+                    # other per-app error and keep going with the others.
+                    raise fetch_result
+                updated_repo = fetch_result
                 if updated_repo:
                     click.echo(f"{app.id}: Repo was updated.")
             else:

@@ -1,5 +1,6 @@
 import json
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -1406,3 +1407,135 @@ def test_archive_stale_data_failed_cleanup_leaves_app_untouched(
     output = capsys.readouterr().out
     assert "failed_app" in output
     assert "volume is in use" in output
+
+
+def test_process_config_one_failed_fetch_does_not_stop_the_others(
+    tmpdir: Path, capsys: Any
+) -> None:
+    # A git fetch failure is per-app: its app is reported as failed and skipped,
+    # while every other app is still processed and reaches the Docker steps.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    apps = []
+    for app_id in ("failed_app", "ok_app_one", "ok_app_two"):
+        apps.append(
+            cli.App(
+                id=app_id,
+                configuration={"url": f"https://example.com/{app_id}"},
+                paths=AppPaths.from_paths(paths, app_id),
+                cache={},
+            )
+        )
+
+    def fake_clone_or_pull(app: cli.App) -> bool:
+        if app.id == "failed_app":
+            raise Exception("network is down")
+        return False
+
+    running_checks: List[str] = []
+    started: List[str] = []
+
+    def fake_is_running(app: cli.App) -> bool:
+        running_checks.append(app.id)
+        return False
+
+    def fake_start(app: cli.App, detach: bool = True) -> None:
+        started.append(app.id)
+
+    with patch.object(
+        cli.App, "clone_or_pull", autospec=True, side_effect=fake_clone_or_pull
+    ):
+        with patch.object(
+            cli.App,
+            "check_parameter_changes",
+            autospec=True,
+            return_value=False,
+        ):
+            with patch.object(
+                cli.App, "is_running", autospec=True, side_effect=fake_is_running
+            ):
+                with patch.object(
+                    cli.App, "start", autospec=True, side_effect=fake_start
+                ):
+                    success = cli.process_config(
+                        cli.Configuration(paths=paths, apps=apps)
+                    )
+
+    # One app failed, so the run as a whole failed, but only that app did.
+    assert success is False
+    output = capsys.readouterr().out
+    assert "failed_app: Error while processing" in output
+    assert "network is down" in output
+    # The two healthy apps are still checked with Docker and started.
+    assert running_checks == ["ok_app_one", "ok_app_two"]
+    assert started == ["ok_app_one", "ok_app_two"]
+
+
+def test_process_config_fetches_overlap_and_precede_docker(tmpdir: Path) -> None:
+    # The enabled apps' fetches must run concurrently: each waits on a barrier
+    # sized to the number of enabled apps, with a timeout, so a serial
+    # implementation fails fast instead of hanging. The disabled app is never
+    # fetched, and no Docker step runs until every fetch has returned.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    apps = []
+    for app_id in ("fetch_a", "disabled_app", "fetch_b", "fetch_c"):
+        configuration: Dict[str, Any] = {"url": f"https://example.com/{app_id}"}
+        if app_id == "disabled_app":
+            configuration["enabled"] = False
+        apps.append(
+            cli.App(
+                id=app_id,
+                configuration=configuration,
+                paths=AppPaths.from_paths(paths, app_id),
+                cache={},
+            )
+        )
+    enabled_ids = ["fetch_a", "fetch_b", "fetch_c"]
+    barrier = threading.Barrier(len(enabled_ids))
+    events: List[Tuple[str, str]] = []
+
+    def fake_clone_or_pull(app: cli.App) -> bool:
+        events.append(("fetch", app.id))
+        # A serial run leaves the first fetch waiting here until the barrier
+        # breaks, so the test fails fast rather than hanging.
+        barrier.wait(timeout=5)
+        events.append(("fetch_done", app.id))
+        return False
+
+    running_checks: List[str] = []
+    started: List[str] = []
+
+    def fake_is_running(app: cli.App) -> bool:
+        events.append(("docker", app.id))
+        running_checks.append(app.id)
+        return False
+
+    def fake_start(app: cli.App, detach: bool = True) -> None:
+        started.append(app.id)
+
+    with patch.object(
+        cli.App, "clone_or_pull", autospec=True, side_effect=fake_clone_or_pull
+    ):
+        with patch.object(
+            cli.App, "check_parameter_changes", autospec=True, return_value=False
+        ):
+            with patch.object(
+                cli.App, "is_running", autospec=True, side_effect=fake_is_running
+            ):
+                with patch.object(
+                    cli.App, "start", autospec=True, side_effect=fake_start
+                ):
+                    cli.process_config(cli.Configuration(paths=paths, apps=apps))
+
+    fetched = [app_id for kind, app_id in events if kind == "fetch"]
+    assert sorted(fetched) == sorted(enabled_ids)
+    assert "disabled_app" not in fetched
+    # The Docker steps run for every healthy app, in config order.
+    assert running_checks == enabled_ids
+    assert started == enabled_ids
+    # Every fetch returned before the first Docker step ran.
+    fetch_done = [i for i, (kind, _) in enumerate(events) if kind == "fetch_done"]
+    docker = [i for i, (kind, _) in enumerate(events) if kind == "docker"]
+    assert len(fetch_done) == len(enabled_ids)
+    assert max(fetch_done) < min(docker)
