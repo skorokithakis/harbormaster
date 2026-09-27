@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.4.1](https://github.com/skorokithakis/harbormaster/compare/v0.4.0...v0.4.1) (2026-09-27)
+
+
+### Features
+
+* Fetch app repositories in parallel during run ([9e66ebe](https://github.com/skorokithakis/harbormaster/commit/9e66ebee8688c1956f7fc3cc835417c25c96c1a3))
+
 ## [0.4.0](https://github.com/skorokithakis/harbormaster/compare/v0.3.5...v0.4.0) (2026-09-22)
 
 
