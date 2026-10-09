@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from click.testing import CliRunner
 from ruamel.yaml import YAML
 
 from docker_harbormaster import cli
@@ -1539,3 +1540,403 @@ def test_process_config_fetches_overlap_and_precede_docker(tmpdir: Path) -> None
     docker = [i for i, (kind, _) in enumerate(events) if kind == "docker"]
     assert len(fetch_done) == len(enabled_ids)
     assert max(fetch_done) < min(docker)
+
+
+def _make_image_app(tmpdir: Path, app_id: str, enabled: bool = True) -> cli.App:
+    """Return an app with a discoverable Compose file in its repo directory."""
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = cli.App(
+        id=app_id,
+        configuration={
+            "url": f"https://example.com/{app_id}",
+            "enabled": enabled,
+        },
+        paths=AppPaths.from_paths(paths, app_id),
+        cache={},
+    )
+    app.paths.repo_dir.mkdir(parents=True, exist_ok=True)
+    (app.paths.repo_dir / "docker-compose.yml").write_text("services: {}\n")
+    return app
+
+
+def _image_configuration(tmpdir: Path, apps: List[cli.App]) -> cli.Configuration:
+    return cli.Configuration(
+        paths=Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir)), apps=apps
+    )
+
+
+def _mock_image_commands(
+    config_images: Dict[Path, Tuple[int, bytes, bytes]],
+    config_json: Dict[Path, Tuple[int, bytes, bytes]],
+    inspected: Dict[str, str],
+    host_images: List[Tuple[str, str, str]],
+    failed_removals: Optional[List[str]] = None,
+) -> Tuple[Any, Any, List[List[Union[str, Path]]], List[str]]:
+    """Return mocks for the command helpers that simulate the image prune."""
+    commands: List[List[Union[str, Path]]] = []
+    removed: List[str] = []
+    failed = failed_removals or []
+
+    def fake_run_command_full(
+        command: List[Union[str, Path]],
+        chdir: Path,
+        environment: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
+    ) -> Tuple[int, bytes]:
+        commands.append(command)
+        return (0, b"")
+
+    def fake_capture(
+        command: List[Union[str, Path]], **kwargs: Any
+    ) -> Tuple[int, bytes, bytes]:
+        commands.append(command)
+        if command[2:3] == ["compose"]:
+            if "--images" in command:
+                return config_images.get(Path(kwargs["chdir"]), (0, b"", b""))
+            if "json" in command:
+                return config_json.get(Path(kwargs["chdir"]), (0, b"", b""))
+        if command[2:4] == ["image", "inspect"]:
+            reference = command[6]
+            # The image commands we issue always carry plain-string references.
+            assert isinstance(reference, str)
+            if reference in inspected:
+                return (0, inspected[reference].encode(), b"")
+            return (1, b"", b"Error: No such image")
+        if command[2:4] == ["image", "ls"]:
+            rows = "".join(
+                f"{image_id}\t{repository}\t{tag}\n"
+                for image_id, repository, tag in host_images
+            )
+            return (0, rows.encode(), b"")
+        if command[2:4] == ["image", "rm"]:
+            target = command[4]
+            # The image commands we issue always carry plain-string targets.
+            assert isinstance(target, str)
+            removed.append(target)
+            if target in failed:
+                # A container may still reference the image, as it would when a
+                # removal fails.
+                return (
+                    1,
+                    b"",
+                    b"Error response from daemon: conflict: image is in use",
+                )
+            return (0, b"", b"")
+        return (0, b"", b"")
+
+    return (
+        patch(
+            "docker_harbormaster.cli._run_command_capture_output",
+            side_effect=fake_capture,
+        ),
+        patch(
+            "docker_harbormaster.cli._run_command_full",
+            side_effect=fake_run_command_full,
+        ),
+        commands,
+        removed,
+    )
+
+
+def _inspected_images(commands: List[List[Union[str, Path]]]) -> List[str]:
+    """Return the image references that were inspected by the issued commands."""
+    return [
+        str(command[6])
+        for command in commands
+        if command[:5] == ["/usr/bin/env", "docker", "image", "inspect", "--format"]
+    ]
+
+
+def test_prune_images_keeps_configured_and_from_images(tmpdir: Path) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    (app.paths.repo_dir / "Dockerfile").write_text("FROM alpine:3.19\n")
+    config_json = {
+        app.paths.repo_dir: (
+            0,
+            json.dumps(
+                {
+                    "services": {
+                        "web": {"build": {"context": ".", "dockerfile": "Dockerfile"}},
+                        # A service whose Dockerfile is missing must not abort
+                        # the prune: its base images are simply unknown.
+                        "missing": {
+                            "build": {"context": ".", "dockerfile": "nope.Dockerfile"}
+                        },
+                    }
+                }
+            ).encode(),
+            b"",
+        )
+    }
+    host_images = [
+        ("sha256:aaa", "app", "latest"),
+        ("sha256:bbb", "shared", "1"),
+        ("sha256:ccc", "alpine", "3.19"),
+        ("sha256:ddd", "old", "1"),
+        ("sha256:eee", "<none>", "<none>"),
+    ]
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"app:latest\nshared:1\n", b"")},
+        config_json=config_json,
+        inspected={
+            "app:latest": "sha256:aaa",
+            "shared:1": "sha256:bbb",
+            "alpine:3.19": "sha256:ccc",
+        },
+        host_images=host_images,
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # The keep set is the union of Compose's configured images and the
+    # Dockerfile's base images, so those three are resolved and left alone.
+    assert sorted(_inspected_images(commands)) == [
+        "alpine:3.19",
+        "app:latest",
+        "shared:1",
+    ]
+    # Everything else goes: tagged images by repo:tag, dangling ones by ID.
+    assert removed == ["old:1", "sha256:eee"]
+
+
+def test_prune_images_skips_stage_names_and_build_args(tmpdir: Path) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    (app.paths.repo_dir / "Dockerfile").write_text(
+        "FROM golang:1.21 AS builder\n"
+        "RUN true\n"
+        "FROM $BASE_IMAGE\n"
+        "FROM builder\n"
+        "FROM alpine:3.19\n"
+    )
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"app:latest\n", b"")},
+        config_json={
+            app.paths.repo_dir: (
+                0,
+                json.dumps(
+                    {
+                        "services": {
+                            "web": {"build": {"context": "."}},
+                        }
+                    }
+                ).encode(),
+                b"",
+            )
+        },
+        inspected={
+            "app:latest": "sha256:aaa",
+            "golang:1.21": "sha256:bbb",
+            "alpine:3.19": "sha256:ccc",
+        },
+        host_images=[
+            ("sha256:aaa", "app", "latest"),
+            ("sha256:bbb", "golang", "1.21"),
+            ("sha256:ccc", "alpine", "3.19"),
+        ],
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # The stage reference (`builder`) and the build-arg reference
+    # (`$BASE_IMAGE`) are not inspected, so they cannot enter the keep set.
+    assert sorted(_inspected_images(commands)) == [
+        "alpine:3.19",
+        "app:latest",
+        "golang:1.21",
+    ]
+    assert removed == []
+
+
+def test_prune_images_ignores_disabled_apps(tmpdir: Path) -> None:
+    enabled = _make_image_app(tmpdir, "enabled")
+    disabled = _make_image_app(tmpdir, "disabled", enabled=False)
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={
+            enabled.paths.repo_dir: (0, b"enabled:latest\n", b""),
+            # The disabled app must never be queried, so a keep reference here
+            # would only enter the set if the prune wrongly considered it.
+            disabled.paths.repo_dir: (0, b"disabled:latest\n", b""),
+        },
+        config_json={},
+        inspected={"enabled:latest": "sha256:aaa"},
+        host_images=[
+            ("sha256:aaa", "enabled", "latest"),
+            ("sha256:ddd", "disabled", "latest"),
+        ],
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [enabled, disabled]))
+
+    # Only the enabled app's image is kept; the disabled app's image is not
+    # protected and is removed.
+    assert removed == ["disabled:latest"]
+
+
+def test_prune_images_failed_config_listing_skips_prune(
+    tmpdir: Path, capsys: Any
+) -> None:
+    app = _make_image_app(tmpdir, "broken")
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (1, b"", b"Error: invalid compose config")},
+        config_json={},
+        inspected={},
+        host_images=[("sha256:ddd", "old", "1")],
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # An incomplete keep set must abort the whole prune: no image is listed or
+    # removed, and the app is named so the user knows why.
+    assert removed == []
+    assert not [c for c in commands if c[2:4] == ["image", "ls"]]
+    assert _inspected_images(commands) == []
+    output = capsys.readouterr().out
+    assert "broken" in output
+    assert "skipping the image prune" in output
+
+
+def test_prune_images_failed_removal_continues(tmpdir: Path, capsys: Any) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"", b"")},
+        config_json={
+            app.paths.repo_dir: (0, json.dumps({"services": {}}).encode(), b"")
+        },
+        inspected={},
+        host_images=[
+            ("sha256:first", "old", "1"),
+            ("sha256:second", "<none>", "<none>"),
+        ],
+        failed_removals=["old:1"],
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # The first removal fails, but the loop moves on and removes the second
+    # image, reporting the failure instead of aborting.
+    assert removed == ["old:1", "sha256:second"]
+    output = capsys.readouterr().out
+    assert "old:1" in output
+    assert "image is in use" in output
+
+
+def test_run_prune_failure_does_not_fail_run(tmpdir: Path) -> None:
+    tmpdir = Path(tmpdir)
+    config_dir = tmpdir / "config"
+    config_dir.mkdir()
+    workdir = tmpdir / "work"
+    workdir.mkdir()
+    config_file = config_dir / "harbormaster.yml"
+    config_file.write_text(
+        "config:\n"
+        "  prune: true\n"
+        "apps:\n"
+        "  myapp:\n"
+        "    url: https://example.com/myapp\n"
+    )
+    repo_dir = Paths.for_workdir(workdir, config_dir=config_dir).repos_dir / "myapp"
+    repo_dir.mkdir(parents=True)
+    (repo_dir / "docker-compose.yml").write_text("services: {}\n")
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={repo_dir: (1, b"", b"Error: invalid compose config")},
+        config_json={},
+        inspected={},
+        host_images=[("sha256:ddd", "old", "1")],
+    )
+    runner = CliRunner()
+    with mock_capture, mock_full:
+        with patch("docker_harbormaster.cli.process_config", return_value=True):
+            with patch("docker_harbormaster.cli.archive_stale_data"):
+                result = runner.invoke(
+                    cli.cli,
+                    [
+                        "run",
+                        "--config",
+                        str(config_file),
+                        "--working-dir",
+                        str(workdir),
+                    ],
+                )
+
+    # A failed keep-set listing skips the prune without touching the run's
+    # success, so the exit code stays at zero.
+    assert result.exit_code == 0
+    assert removed == []
+    assert "skipping the image prune" in result.output
+
+
+def test_prune_images_parses_json_despite_stderr_warning(tmpdir: Path) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    (app.paths.repo_dir / "Dockerfile").write_text("FROM alpine:3.19\n")
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"", b"")},
+        config_json={
+            app.paths.repo_dir: (
+                0,
+                json.dumps({"services": {"web": {"build": {"context": "."}}}}).encode(),
+                b"WARN[0000] the attribute `version` is obsolete\n",
+            )
+        },
+        inspected={"alpine:3.19": "sha256:ccc"},
+        host_images=[
+            ("sha256:ccc", "alpine", "3.19"),
+            ("sha256:ddd", "old", "1"),
+        ],
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # Compose writes a warning to stderr while exiting zero; because stdout is
+    # parsed on its own, the JSON survives and the base image is kept.
+    assert _inspected_images(commands) == ["alpine:3.19"]
+    assert removed == ["old:1"]
+
+
+def test_prune_images_removes_digest_image_by_id(tmpdir: Path) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"", b"")},
+        config_json={
+            app.paths.repo_dir: (0, json.dumps({"services": {}}).encode(), b"")
+        },
+        inspected={},
+        host_images=[("sha256:digest", "myrepo", "<none>")],
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # An image pulled by digest has a real repository but tag `<none>`, so
+    # `myrepo:<none>` would be invalid and the ID is used instead.
+    assert removed == ["sha256:digest"]
+
+
+def test_prune_images_handles_dockerfile_continuations(tmpdir: Path) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    (app.paths.repo_dir / "Dockerfile").write_text(
+        "FROM --platform=linux/amd64 \\\n"
+        "    # base image\n"
+        "    alpine:3.19 \\\n"
+        "    AS builder\n"
+        "FROM builder\n"
+    )
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"", b"")},
+        config_json={
+            app.paths.repo_dir: (
+                0,
+                json.dumps({"services": {"web": {"build": {"context": "."}}}}).encode(),
+                b"",
+            )
+        },
+        inspected={"alpine:3.19": "sha256:ccc"},
+        host_images=[("sha256:ccc", "alpine", "3.19")],
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # The continued FROM resolves to `alpine:3.19`, and the continued AS
+    # declares `builder`, so the later `FROM builder` is recognised as a stage
+    # reference and skipped rather than kept.
+    assert _inspected_images(commands) == ["alpine:3.19"]
+    assert removed == []

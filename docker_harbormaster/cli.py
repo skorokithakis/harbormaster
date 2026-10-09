@@ -468,16 +468,21 @@ def _run_command_full(
 def _run_command_capture_output(
     command: List[Union[str, Path]],
     environment: Optional[Dict[str, str]] = None,
+    chdir: Optional[Path] = None,
 ) -> Tuple[int, bytes, bytes]:
     """Run a command and return its exit code, stdout, and stderr separately."""
     # Docker writes warnings (config file notices, credential helper messages,
     # DOCKER_HOST deprecations) to stderr while exiting zero, so the streams
     # must be kept apart here: a caller that parses stdout as JSON would choke
     # on the merged output of _run_command_full. Unlike _run_command_full, no
-    # shell and cd are needed, as `docker volume` subcommands never resolve
-    # relative paths against the working directory.
+    # shell is needed: `docker volume` and `docker image` subcommands never
+    # resolve relative paths against the working directory, and the `docker
+    # compose config` calls only read the Compose and Dockerfile files, which
+    # are read by this same process, so a plain cwd (not the shell/symlink
+    # trick) puts Compose in the app's repo while the Dockerfile paths stay
+    # readable here.
     # The app's environment is overlaid on the process's, exactly as
-    # _run_command_full does: the volume commands must reach the same daemon as
+    # _run_command_full does: the commands must reach the same daemon as
     # `docker compose up`, which runs with the app's environment.
     env = os.environ.copy()
     if environment:
@@ -486,6 +491,7 @@ def _run_command_capture_output(
         [str(part) for part in command],
         capture_output=True,
         env=env,
+        cwd=chdir,
     )
     debug(f"Command: {' '.join(str(part) for part in command)}")
     debug(f"Return code: {process.returncode}")
@@ -1147,6 +1153,252 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
     return all(successes)
 
 
+# A Dockerfile FROM line names its image after an optional `--platform` flag
+# and before an optional `AS <stage>` suffix, and Docker accepts any casing of
+# FROM and AS. The image reference is the only part that names something on the
+# registry, so it is captured on its own; a line that does not match is not a
+# FROM and is skipped.
+_DOCKERFILE_FROM_RE = re.compile(
+    r"^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?",
+    re.IGNORECASE,
+)
+
+
+def _join_line_continuations(contents: str) -> List[str]:
+    """Join backslash-terminated Dockerfile lines into single logical lines."""
+    lines: List[str] = []
+    pending = ""
+    for raw_line in contents.splitlines():
+        stripped = raw_line.rstrip()
+        if stripped.lstrip().startswith("#"):
+            # Docker ignores full-line comments even inside a continued
+            # instruction, so a comment neither joins nor ends the pending
+            # line.
+            continue
+        if stripped.endswith("\\"):
+            # The `escape` directive can change the escape character, but
+            # honoring it is not worth the complexity for this best-effort
+            # scan: a missed base image only means it is not protected.
+            pending += stripped[:-1] + " "
+            continue
+        lines.append(pending + raw_line)
+        pending = ""
+    if pending:
+        lines.append(pending)
+    return lines
+
+
+def _dockerfile_base_images(contents: str) -> List[str]:
+    """
+    Return the base image references a Dockerfile's FROM lines name.
+
+    A reference containing a `$` is a build-arg expansion that cannot be
+    resolved here, and a reference naming an earlier `AS` stage is an
+    intermediate build stage rather than an image on the host, so both are
+    left out. Stage names are compared case-insensitively because Docker
+    treats them that way.
+    """
+    images: List[str] = []
+    stage_names: Set[str] = set()
+    for line in _join_line_continuations(contents):
+        match = _DOCKERFILE_FROM_RE.match(line)
+        if not match:
+            continue
+        image, stage_name = match.group(1), match.group(2)
+        is_stage_reference = image.lower() in stage_names
+        if stage_name:
+            # The stage is recorded even when its own reference is skipped, so
+            # a later FROM can still recognise it.
+            stage_names.add(stage_name.lower())
+        if "$" in image or is_stage_reference:
+            continue
+        images.append(image)
+    return images
+
+
+def _collect_base_image_references(apps: List[App]) -> Set[str]:
+    """
+    Return the base image references of the enabled apps, best effort.
+
+    Every trouble here (unreadable config output, a service without a usable
+    build stanza, a missing Dockerfile) is local to the service that caused
+    it: the reference simply stays out of the keep set and the prune still
+    runs.
+    """
+    references: Set[str] = set()
+    for app in apps:
+        try:
+            returncode, stdout, _ = _run_command_capture_output(
+                [
+                    "/usr/bin/env",
+                    "docker",
+                    "compose",
+                    *app.compose_config_command,
+                    "config",
+                    "--format",
+                    "json",
+                ],
+                environment=app.environment,
+                chdir=app.paths.repo_dir,
+            )
+        except Exception:
+            # A Compose file that cannot even be resolved (a first-run clone
+            # that produced no repo, an unreadable file) is a problem for this
+            # app alone, so its base images are simply unknown.
+            continue
+        if returncode != 0:
+            continue
+        try:
+            rendered = json.loads(stdout)
+        except (TypeError, ValueError):
+            continue
+        services = rendered.get("services") or {}
+        for service in services.values():
+            if not isinstance(service, dict):
+                continue
+            build = service.get("build")
+            if not isinstance(build, dict):
+                # A build stanza can be a bare context string in a Compose
+                # file, but Compose's own JSON output is always a mapping.
+                continue
+            context = build.get("context")
+            if not context:
+                continue
+            dockerfile = build.get("dockerfile") or "Dockerfile"
+            path = Path(context) / dockerfile
+            if not path.is_absolute():
+                path = app.paths.repo_dir / path
+            try:
+                contents = path.read_text()
+            except OSError:
+                continue
+            references.update(_dockerfile_base_images(contents))
+    return references
+
+
+def prune_images(configuration: Configuration) -> None:
+    """
+    Delete every Docker image the configuration's enabled apps do not use.
+
+    The keep set is built from what Compose reports rather than from the
+    Compose files: `config --images` resolves every service's image the way
+    `docker compose up` would, so interpolated and defaulted references are
+    not missed. The base images of services that only build are added from
+    their Dockerfiles, as Compose does not report those. Anything that cannot
+    be resolved to an image on the host is simply not in the keep set.
+
+    A failure to build the keep set aborts the prune instead of risking the
+    deletion of an image an app needs; every other failure is reported and
+    skipped, so the prune never fails the run.
+    """
+    enabled_apps = [app for app in configuration.apps if app.enabled]
+
+    keep_references: Set[str] = set()
+    for app in enabled_apps:
+        try:
+            returncode, stdout, _ = _run_command_capture_output(
+                [
+                    "/usr/bin/env",
+                    "docker",
+                    "compose",
+                    *app.compose_config_command,
+                    "config",
+                    "--images",
+                ],
+                environment=app.environment,
+                chdir=app.paths.repo_dir,
+            )
+        except Exception as e:
+            # Resolving the app's Compose files can fail before any command
+            # runs (a first-run clone that produced no repo, an unreadable
+            # file), which leaves the same incomplete keep set as a failed
+            # listing would, so the whole prune is skipped.
+            click.echo(
+                f"Warning: could not list the images of app {app.id}: {e}. "
+                "Skipping the image prune for this run."
+            )
+            return
+        if returncode != 0:
+            click.echo(
+                f"Warning: could not list the images of app {app.id}, "
+                "skipping the image prune for this run."
+            )
+            return
+        for line in stdout.decode().splitlines():
+            image = line.strip()
+            if image:
+                keep_references.add(image)
+
+    keep_references.update(_collect_base_image_references(enabled_apps))
+
+    # Docker addresses an image by its ID, and one ID can carry several tags,
+    # so the keep set is resolved to IDs: keeping one tag of a multi-tag image
+    # must protect the image itself.
+    keep_ids: Set[str] = set()
+    for reference in keep_references:
+        returncode, stdout, _ = _run_command_capture_output(
+            [
+                "/usr/bin/env",
+                "docker",
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                reference,
+            ]
+        )
+        if returncode != 0:
+            # The reference is not on the host (a not-yet-built image, an
+            # unpulled base image, ...), so there is nothing to keep.
+            continue
+        keep_ids.add(stdout.decode().strip())
+
+    returncode, stdout, stderr = _run_command_capture_output(
+        [
+            "/usr/bin/env",
+            "docker",
+            "image",
+            "ls",
+            "--no-trunc",
+            "--format",
+            "{{.ID}}\t{{.Repository}}\t{{.Tag}}",
+        ]
+    )
+    if returncode != 0:
+        click.echo(
+            f"Warning: could not list the Docker images: {stderr.decode().strip()}"
+        )
+        return
+
+    for line in stdout.decode().splitlines():
+        if not line.strip():
+            continue
+        image_id, _, repository_and_tag = line.partition("\t")
+        repository, _, tag = repository_and_tag.partition("\t")
+        if image_id in keep_ids:
+            continue
+        # An image is removed by repo:tag so only the one tag goes, but a
+        # `repo:<none>` reference (an image pulled by digest, or a dangling
+        # one) is invalid, so either placeholder means the ID is the only
+        # handle.
+        target = (
+            image_id
+            if repository == "<none>" or tag == "<none>"
+            else f"{repository}:{tag}"
+        )
+        returncode, _, rm_stderr = _run_command_capture_output(
+            ["/usr/bin/env", "docker", "image", "rm", target]
+        )
+        if returncode != 0:
+            # A container may still use the image, or another process may be
+            # removing it. Neither is fatal, so the failure is reported and the
+            # rest of the images are still processed.
+            click.echo(
+                f"Warning: could not remove the Docker image {target}: "
+                f"{rm_stderr.decode().strip()}"
+            )
+
+
 def _remove_stale_volume_records(app_name: str, paths: Paths) -> bool:
     """
     Remove the Docker volume records an app removed from the config left behind.
@@ -1374,18 +1626,8 @@ def run(config: Path, working_dir: Path, force_restart: bool):
     success = process_config(configuration, force_restart=force_restart)
 
     if configuration.prune:
-        click.echo("Pruning all unused images...")
-        _run_command(
-            [
-                "/usr/bin/env",
-                "docker",
-                "system",
-                "prune",
-                "--all",
-                "--force",
-            ],
-            workdir,
-        )
+        click.echo("Pruning unused images...")
+        prune_images(configuration)
     click.echo("Finished successfully." if success else "Finished with errors.")
     sys.exit(0 if success else 1)
 

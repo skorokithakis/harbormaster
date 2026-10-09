@@ -30,9 +30,15 @@ apps:
 ## Configuration directives
 
 - `config`: Top-level configuration options.
-  - `prune`: If set to `true`, it prunes all unused system images after a run to save
-    space on the host. Be careful, as it will delete unused Docker images on your
-    system.
+  - `prune`: If set to `true`, Harbormaster deletes every Docker image that no enabled
+    app uses after each run, to save space on the host. An enabled app uses the images
+    named in its Compose file and, best effort, the base images named in the `FROM`
+    lines of the Dockerfiles it builds. Images of disabled or removed apps, old
+    versions, and dangling images are deleted. Images that a container still uses are
+    left alone, and containers, networks, the build cache and volumes are never
+    touched. If the image list of any enabled app cannot be read, the prune is skipped
+    for that run. Be careful, as it will also delete Docker images on your system that
+    are unrelated to Harbormaster.
 - `apps`: A list of applications to deploy.
   - `myapp`: The name of the application. It can be anything you want.
     - `url`: The git repository URL to clone.
