@@ -1,6 +1,22 @@
 # Changelog
 
 
+## [0.5.0](https://github.com/skorokithakis/harbormaster/compare/v0.4.1...v0.5.0) (2026-10-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* `prune: true` no longer removes stopped containers, unused networks, or the build cache. Compose `down` handles the first two per app and BuildKit's own garbage collection bounds the third.
+
+### Features
+
+* Prune only the images that no enabled app uses ([1aa2fa8](https://github.com/skorokithakis/harbormaster/commit/1aa2fa84980ed81e12a76a089ef30f9c0ba58b7a))
+
+
+### Bug Fixes
+
+* Keep the images of existing containers when pruning ([836c915](https://github.com/skorokithakis/harbormaster/commit/836c91506ad3c066574a9241299a997e2087e147))
+
 ## [0.4.1](https://github.com/skorokithakis/harbormaster/compare/v0.4.0...v0.4.1) (2026-09-27)
 
 
