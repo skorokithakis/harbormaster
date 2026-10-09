@@ -69,11 +69,13 @@ Top level:
   that no enabled app uses. An enabled app uses the images named in its Compose file
   (as `docker compose config --images` reports them) and, best effort, the base images
   named in the `FROM` lines of the Dockerfiles it builds. Images of disabled or removed
-  apps, old versions, and dangling images are deleted. Images that a container still
-  uses are left alone. Containers, networks, the build cache and volumes are never
-  touched. If the image list of any enabled app cannot be read, the prune is skipped
-  for that run. This deletes unrelated images on the host too, not only Harbormaster's,
-  so leave it off unless the operator asks for it.
+  apps, old versions, and dangling images are deleted. Images that any container uses,
+  running or stopped (including Harbormaster's own container), are kept. Containers,
+  networks, the build cache and volumes are never touched. If the image list of any
+  enabled app cannot be read, the prune is skipped for that run. This deletes unrelated
+  images on the host too, not only Harbormaster's. Recommend turning it on when the
+  host only runs Harbormaster; on a shared host, leave it off unless the operator asks
+  for it.
 
 Per app:
 

@@ -34,11 +34,12 @@ apps:
     app uses after each run, to save space on the host. An enabled app uses the images
     named in its Compose file and, best effort, the base images named in the `FROM`
     lines of the Dockerfiles it builds. Images of disabled or removed apps, old
-    versions, and dangling images are deleted. Images that a container still uses are
-    left alone, and containers, networks, the build cache and volumes are never
-    touched. If the image list of any enabled app cannot be read, the prune is skipped
-    for that run. Be careful, as it will also delete Docker images on your system that
-    are unrelated to Harbormaster.
+    versions, and dangling images are deleted. Images that any container uses, running
+    or stopped, are kept, and containers, networks, the build cache and volumes are
+    never touched. If the image list of any enabled app cannot be read, the prune is
+    skipped for that run. The default is `false`. Turning it on is recommended when
+    the host only runs Harbormaster. Be careful on a shared host, as it will also
+    delete Docker images on your system that are unrelated to Harbormaster.
 - `apps`: A list of applications to deploy.
   - `myapp`: The name of the application. It can be anything you want.
     - `url`: The git repository URL to clone.

@@ -1353,6 +1353,50 @@ def prune_images(configuration: Configuration) -> None:
             continue
         keep_ids.add(stdout.decode().strip())
 
+    # A container's image must survive, even when no enabled app names it (eg
+    # Harbormaster's own image). The prune runs after process_config, so the
+    # containers of a just-replaced app image are already gone and this list
+    # reflects the containers that remain. `docker image rm` without --force
+    # refuses these images anyway, so keeping them only saves the per-image
+    # warning noise and the stray untagging a partial removal of a multi-tag
+    # image would leave behind.
+    returncode, stdout, stderr = _run_command_capture_output(
+        ["/usr/bin/env", "docker", "ps", "--all", "--quiet", "--no-trunc"]
+    )
+    if returncode != 0:
+        click.echo(
+            f"Warning: could not list the Docker containers: "
+            f"{stderr.decode().strip()}. Their images will not be protected by ID, "
+            "but a removal without --force still refuses them."
+        )
+    else:
+        container_ids = [line for line in stdout.decode().splitlines() if line]
+        if container_ids:
+            returncode, stdout, stderr = _run_command_capture_output(
+                [
+                    "/usr/bin/env",
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{.Image}}",
+                    *container_ids,
+                ]
+            )
+            # Docker prints the image IDs of the containers it did inspect even
+            # when the command exits non-zero (eg a container vanished between
+            # `ps` and `inspect`), so the stdout IDs are kept regardless and the
+            # warning only names the containers whose images stay unprotected.
+            keep_ids.update(
+                line.strip() for line in stdout.decode().splitlines() if line.strip()
+            )
+            if returncode != 0:
+                click.echo(
+                    f"Warning: could not fully inspect the Docker containers: "
+                    f"{stderr.decode().strip()}. The images of any containers it "
+                    "could not inspect will not be protected by ID, but a removal "
+                    "without --force still refuses them."
+                )
+
     returncode, stdout, stderr = _run_command_capture_output(
         [
             "/usr/bin/env",

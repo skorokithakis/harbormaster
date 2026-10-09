@@ -1572,11 +1572,15 @@ def _mock_image_commands(
     inspected: Dict[str, str],
     host_images: List[Tuple[str, str, str]],
     failed_removals: Optional[List[str]] = None,
+    container_images: Optional[Dict[str, str]] = None,
+    container_inspect_returncode: int = 0,
+    container_inspect_stderr: bytes = b"",
 ) -> Tuple[Any, Any, List[List[Union[str, Path]]], List[str]]:
     """Return mocks for the command helpers that simulate the image prune."""
     commands: List[List[Union[str, Path]]] = []
     removed: List[str] = []
     failed = failed_removals or []
+    containers = container_images or {}
 
     def fake_run_command_full(
         command: List[Union[str, Path]],
@@ -1596,6 +1600,19 @@ def _mock_image_commands(
                 return config_images.get(Path(kwargs["chdir"]), (0, b"", b""))
             if "json" in command:
                 return config_json.get(Path(kwargs["chdir"]), (0, b"", b""))
+        if command[2:3] == ["ps"]:
+            ids = "".join(f"{container_id}\n" for container_id in containers)
+            return (0, ids.encode(), b"")
+        if command[2:4] == ["inspect", "--format"]:
+            requested = [str(part) for part in command[5:]]
+            images = "".join(
+                f"{containers[container_id]}\n" for container_id in requested
+            )
+            return (
+                container_inspect_returncode,
+                images.encode(),
+                container_inspect_stderr,
+            )
         if command[2:4] == ["image", "inspect"]:
             reference = command[6]
             # The image commands we issue always carry plain-string references.
@@ -1940,3 +1957,53 @@ def test_prune_images_handles_dockerfile_continuations(tmpdir: Path) -> None:
     # reference and skipped rather than kept.
     assert _inspected_images(commands) == ["alpine:3.19"]
     assert removed == []
+
+
+def test_prune_images_keeps_images_used_by_containers(tmpdir: Path) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"", b"")},
+        config_json={
+            app.paths.repo_dir: (0, json.dumps({"services": {}}).encode(), b"")
+        },
+        inspected={},
+        host_images=[
+            ("sha256:container", "harbormaster", "latest"),
+            ("sha256:unused", "old", "1"),
+        ],
+        container_images={"c123": "sha256:container"},
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # An image a container uses is kept even though no enabled app names it
+    # (eg Harbormaster's own image); the unused image is still removed.
+    assert removed == ["old:1"]
+
+
+def test_prune_images_keeps_images_from_partial_container_inspect(
+    tmpdir: Path, capsys: Any
+) -> None:
+    app = _make_image_app(tmpdir, "myapp")
+    mock_capture, mock_full, commands, removed = _mock_image_commands(
+        config_images={app.paths.repo_dir: (0, b"", b"")},
+        config_json={
+            app.paths.repo_dir: (0, json.dumps({"services": {}}).encode(), b"")
+        },
+        inspected={},
+        host_images=[
+            ("sha256:container", "harbormaster", "latest"),
+            ("sha256:unused", "old", "1"),
+        ],
+        container_images={"c123": "sha256:container"},
+        container_inspect_returncode=1,
+        container_inspect_stderr=b"Error: No such container: c999",
+    )
+    with mock_capture, mock_full:
+        cli.prune_images(_image_configuration(tmpdir, [app]))
+
+    # A container vanished between `ps` and `inspect`, so the inspect exits
+    # non-zero, but Docker still printed the image of the container it did
+    # inspect; that image is protected and the warning reports the rest.
+    assert removed == ["old:1"]
+    assert "could not fully inspect" in capsys.readouterr().out
