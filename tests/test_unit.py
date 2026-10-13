@@ -1542,6 +1542,220 @@ def test_process_config_fetches_overlap_and_precede_docker(tmpdir: Path) -> None
     assert max(fetch_done) < min(docker)
 
 
+def _make_cache_app(
+    paths: Paths, app_id: str, cache: Optional[Dict[str, str]] = None
+) -> cli.App:
+    """Return an app sharing the given paths, with the given cache entry."""
+    return cli.App(
+        id=app_id,
+        configuration={"url": f"https://example.com/{app_id}"},
+        paths=AppPaths.from_paths(paths, app_id),
+        cache=dict(cache or {}),
+    )
+
+
+def test_pull_uses_deployed_rev(tmpdir: Path) -> None:
+    # With a deployed_rev in the cache, an update is decided by comparing the
+    # freshly pulled HEAD to it, not by this run's own starting point.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = _make_cache_app(paths, "app", cache={"deployed_rev": "aaa"})
+
+    with patch.object(cli.App, "pull_upstream", autospec=True):
+        with patch.object(
+            cli.App, "get_current_hash", autospec=True, return_value="aaa"
+        ):
+            # HEAD is still the deployed revision, so no update is needed.
+            assert app.pull() is False
+        with patch.object(
+            cli.App, "get_current_hash", autospec=True, return_value="bbb"
+        ):
+            # HEAD moved away from the deployed revision, so an update is due.
+            assert app.pull() is True
+
+
+def test_pull_without_deployed_rev_falls_back_to_in_run_diff(tmpdir: Path) -> None:
+    # A cache entry written before deployed_rev existed must use this run's
+    # old_rev/new_rev comparison, so upgrading does not restart every app.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = _make_cache_app(paths, "app", cache={"environment_hash": "x"})
+
+    with patch.object(cli.App, "pull_upstream", autospec=True):
+        with patch.object(
+            cli.App, "get_current_hash", autospec=True, side_effect=["aaa", "aaa"]
+        ):
+            # The pull did not move HEAD, so no restart.
+            assert app.pull() is False
+        with patch.object(
+            cli.App, "get_current_hash", autospec=True, side_effect=["aaa", "bbb"]
+        ):
+            # The pull moved HEAD, so an update is due.
+            assert app.pull() is True
+
+
+def test_get_current_hash_raises_when_rev_parse_fails(tmpdir: Path) -> None:
+    # _run_command_full merges stderr into stdout and ignores the exit code, so
+    # a failed rev-parse must be rejected rather than stored as a revision.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = _make_cache_app(paths, "app")
+
+    with patch(
+        "docker_harbormaster.cli._run_command_full",
+        return_value=(128, b"fatal: not a git repository"),
+    ):
+        with pytest.raises(Exception, match="Could not read the revision"):
+            app.get_current_hash()
+
+
+def test_successful_run_records_deployed_rev(tmpdir: Path) -> None:
+    # After a no-op, the cache entry records the currently deployed commit, so
+    # the next run can tell whether HEAD changed.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = _make_cache_app(paths, "app")
+
+    with patch.object(cli.App, "clone_or_pull", autospec=True, return_value=False):
+        with patch.object(
+            cli.App, "check_parameter_changes", autospec=True, return_value=False
+        ):
+            with patch.object(cli.App, "is_running", autospec=True, return_value=True):
+                with patch.object(
+                    cli.App, "get_current_hash", autospec=True, return_value="abc"
+                ):
+                    success = cli.process_config(
+                        cli.Configuration(paths=paths, apps=[app])
+                    )
+
+    assert success is True
+    written = json.loads(paths.cache_file.read_text())
+    assert written["app"]["deployed_rev"] == "abc"
+
+
+def _seed_cache_entry(paths: Paths, head: str) -> Dict[str, str]:
+    """Run a successful baseline and return the cache entry it writes."""
+    app = _make_cache_app(paths, "app")
+    with patch.object(cli.App, "clone_or_pull", autospec=True, return_value=False):
+        with patch.object(cli.App, "is_running", autospec=True, return_value=False):
+            with patch.object(
+                cli.App, "get_current_hash", autospec=True, return_value=head
+            ):
+                with patch.object(cli.App, "start", autospec=True):
+                    cli.process_config(cli.Configuration(paths=paths, apps=[app]))
+    entry: Dict[str, str] = json.loads(paths.cache_file.read_text())["app"]
+    return entry
+
+
+def _next_run(
+    paths: Paths, cache: Dict[str, str], head: str
+) -> Tuple[List[str], List[str]]:
+    """
+    Run process_config once on a reloaded entry, with git and Docker mocked.
+
+    clone_or_pull runs for real, so pull() decides from the cache's
+    deployed_rev; only the git and Docker calls beneath it are mocked. Returns
+    the app ids that were stopped and started.
+    """
+    app = _make_cache_app(paths, "app", cache=cache)
+    app.paths.repo_dir.mkdir(parents=True, exist_ok=True)
+    stopped: List[str] = []
+    started: List[str] = []
+
+    def record_stop(self: cli.App, *args: Any, **kwargs: Any) -> None:
+        stopped.append(self.id)
+
+    def record_start(self: cli.App, *args: Any, **kwargs: Any) -> None:
+        started.append(self.id)
+
+    with patch.object(cli.App, "is_repo", autospec=True, return_value=True):
+        with patch.object(cli.App, "pull_upstream", autospec=True):
+            with patch.object(cli.App, "_render_config_vars", autospec=True):
+                with patch.object(
+                    cli.App, "get_current_hash", autospec=True, return_value=head
+                ):
+                    with patch.object(
+                        cli.App, "is_running", autospec=True, return_value=True
+                    ):
+                        with patch.object(
+                            cli.App, "stop", autospec=True, side_effect=record_stop
+                        ):
+                            with patch.object(
+                                cli.App,
+                                "start",
+                                autospec=True,
+                                side_effect=record_start,
+                            ):
+                                cli.process_config(
+                                    cli.Configuration(paths=paths, apps=[app])
+                                )
+    return stopped, started
+
+
+def test_failed_fetch_keeps_previous_entry_and_no_restart(tmpdir: Path) -> None:
+    # A fetch failure must write back the entry exactly as it was loaded, and
+    # the next run must not restart the app when HEAD is still the deployed rev.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    original = _seed_cache_entry(paths, head="rev1")
+
+    def fake_clone_or_pull(app: cli.App) -> bool:
+        raise Exception("network is down")
+
+    app = _make_cache_app(paths, "app", cache=original)
+    with patch.object(
+        cli.App, "clone_or_pull", autospec=True, side_effect=fake_clone_or_pull
+    ):
+        success = cli.process_config(cli.Configuration(paths=paths, apps=[app]))
+
+    assert success is False
+    written = json.loads(paths.cache_file.read_text())["app"]
+    # The whole entry survived, including its parameter hashes.
+    assert written == original
+
+    # The next run reloads that entry. The fetch succeeds and HEAD is unchanged
+    # at rev1, so nothing is stopped or started.
+    stopped, started = _next_run(paths, cache=written, head="rev1")
+    assert stopped == []
+    assert started == []
+
+
+def test_start_failure_after_update_retries_deploy_next_run(tmpdir: Path) -> None:
+    # A pull that moved HEAD followed by a failed start must write back the whole
+    # original entry, so the next run sees an update and retries the deploy.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    original = _seed_cache_entry(paths, head="rev1")
+    assert original["deployed_rev"] == "rev1"
+
+    def fake_clone_or_pull(app: cli.App) -> bool:
+        return True
+
+    def fake_start(app: cli.App, detach: bool = True) -> None:
+        raise Exception("could not start")
+
+    app = _make_cache_app(paths, "app", cache=original)
+    with patch.object(
+        cli.App, "clone_or_pull", autospec=True, side_effect=fake_clone_or_pull
+    ):
+        with patch.object(cli.App, "is_running", autospec=True, return_value=False):
+            with patch.object(cli.App, "start", autospec=True, side_effect=fake_start):
+                success = cli.process_config(cli.Configuration(paths=paths, apps=[app]))
+
+    assert success is False
+    written = json.loads(paths.cache_file.read_text())["app"]
+    # The failed run wrote back the entire original entry, and did not advance
+    # deployed_rev past the failed deploy, even though check_parameter_changes()
+    # mutated app.cache during the run.
+    assert written == original
+
+    # The next run reloads it. HEAD now sits at the pulled rev2, so the app is
+    # stopped and started again.
+    stopped, started = _next_run(paths, cache=written, head="rev2")
+    assert stopped == ["app"]
+    assert started == ["app"]
+
+
 def _make_image_app(tmpdir: Path, app_id: str, enabled: bool = True) -> cli.App:
     """Return an app with a discoverable Compose file in its repo directory."""
     paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))

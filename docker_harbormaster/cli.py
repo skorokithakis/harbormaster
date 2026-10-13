@@ -559,6 +559,10 @@ class App:
         self.branch: str = configuration.get("branch", "master")
         self.paths = paths
         self.cache = cache
+        # check_parameter_changes() mutates self.cache in place, so keep an
+        # unmodified copy of the entry as it was loaded, to write back if this
+        # app fails.
+        self.loaded_cache = dict(cache)
 
         self.environment: Dict[str, str] = _read_var_file(
             filename=configuration.get("environment_file"),
@@ -967,8 +971,21 @@ class App:
         self.pull_upstream()
         new_rev = self.get_current_hash()
 
+        deployed_rev = self.cache.get("deployed_rev")
+        if deployed_rev is None:
+            # An entry written before deployed_rev existed: fall back to whether
+            # this run's pull moved HEAD, so upgrading does not redeploy every
+            # app on the first run.
+            updated = old_rev != new_rev
+        else:
+            # Compare the freshly pulled HEAD to the revision that was last
+            # successfully deployed, not to this run's starting point: a pull
+            # that moved HEAD but whose start then failed must still look like
+            # an update next run, and an unchanged HEAD must not restart the app.
+            updated = new_rev != deployed_rev
+
         debug(f"Old rev is {old_rev}, new rev is {new_rev}.")
-        if old_rev == new_rev:
+        if not updated:
             debug("No update required.")
             # No update necessary.
             return False
@@ -977,13 +994,18 @@ class App:
 
     def get_current_hash(self) -> str:
         """Return the git repository's current commit SHA."""
-        return (
-            _run_command_full(
-                ["/usr/bin/env", "git", "rev-parse", "HEAD"], self.paths.repo_dir
-            )[1]
-            .decode()
-            .strip()
+        returncode, stdout = _run_command_full(
+            ["/usr/bin/env", "git", "rev-parse", "HEAD"], self.paths.repo_dir
         )
+        if returncode != 0:
+            # _run_command_full merges stderr into stdout, so a failure would
+            # otherwise look like a (garbage) revision. Treat it as an error, so
+            # it is never stored as the deployed revision.
+            raise Exception(
+                f"Could not read the revision of repository for app "
+                f"{self.id}: {stdout.decode().strip()}"
+            )
+        return stdout.decode().strip()
 
     def pull_upstream(self) -> None:
         """
@@ -1101,7 +1123,7 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
                     fetch_results[app] = e
 
     successes = []
-    cache = {"version": 1}
+    cache: Dict[str, Any] = {"version": 1}
     for app in configuration.apps:
         debug("-" * 100)
         click.echo(f"Updating {app.id} ({app.branch})...")
@@ -1138,11 +1160,23 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
             else:
                 click.echo(f"{app.id}: App does not need to be started.")
 
+            if app.enabled:
+                # Record the revision that is now deployed, so the next run only
+                # treats a changed HEAD as an update. This is set only on
+                # success: a pull that moved HEAD but whose start then failed
+                # keeps the old revision, so the deploy is retried next run.
+                app.cache["deployed_rev"] = app.get_current_hash()
+
             cache[app.id] = app.cache
 
             successes.append(True)
         except Exception as e:
             click.echo(f"{app.id}: Error while processing: {e}")
+            # Write back the entry exactly as it was loaded, because
+            # check_parameter_changes() may already have mutated app.cache.
+            # Dropping the entry would make the next run see empty hashes and
+            # restart the app even when nothing changed.
+            cache[app.id] = app.loaded_cache
             successes.append(False)
         click.echo("")
 
