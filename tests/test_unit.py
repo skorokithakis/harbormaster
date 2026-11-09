@@ -1455,12 +1455,13 @@ def test_process_config_one_failed_fetch_does_not_stop_the_others(
             with patch.object(
                 cli.App, "is_running", autospec=True, side_effect=fake_is_running
             ):
-                with patch.object(
-                    cli.App, "start", autospec=True, side_effect=fake_start
-                ):
-                    success = cli.process_config(
-                        cli.Configuration(paths=paths, apps=apps)
-                    )
+                with patch.object(cli.App, "build", autospec=True):
+                    with patch.object(
+                        cli.App, "start", autospec=True, side_effect=fake_start
+                    ):
+                        success = cli.process_config(
+                            cli.Configuration(paths=paths, apps=apps)
+                        )
 
     # One app failed, so the run as a whole failed, but only that app did.
     assert success is False
@@ -1524,10 +1525,11 @@ def test_process_config_fetches_overlap_and_precede_docker(tmpdir: Path) -> None
             with patch.object(
                 cli.App, "is_running", autospec=True, side_effect=fake_is_running
             ):
-                with patch.object(
-                    cli.App, "start", autospec=True, side_effect=fake_start
-                ):
-                    cli.process_config(cli.Configuration(paths=paths, apps=apps))
+                with patch.object(cli.App, "build", autospec=True):
+                    with patch.object(
+                        cli.App, "start", autospec=True, side_effect=fake_start
+                    ):
+                        cli.process_config(cli.Configuration(paths=paths, apps=apps))
 
     fetched = [app_id for kind, app_id in events if kind == "fetch"]
     assert sorted(fetched) == sorted(enabled_ids)
@@ -1641,8 +1643,9 @@ def _seed_cache_entry(paths: Paths, head: str) -> Dict[str, str]:
             with patch.object(
                 cli.App, "get_current_hash", autospec=True, return_value=head
             ):
-                with patch.object(cli.App, "start", autospec=True):
-                    cli.process_config(cli.Configuration(paths=paths, apps=[app]))
+                with patch.object(cli.App, "build", autospec=True):
+                    with patch.object(cli.App, "start", autospec=True):
+                        cli.process_config(cli.Configuration(paths=paths, apps=[app]))
     entry: Dict[str, str] = json.loads(paths.cache_file.read_text())["app"]
     return entry
 
@@ -1680,15 +1683,16 @@ def _next_run(
                         with patch.object(
                             cli.App, "stop", autospec=True, side_effect=record_stop
                         ):
-                            with patch.object(
-                                cli.App,
-                                "start",
-                                autospec=True,
-                                side_effect=record_start,
-                            ):
-                                cli.process_config(
-                                    cli.Configuration(paths=paths, apps=[app])
-                                )
+                            with patch.object(cli.App, "build", autospec=True):
+                                with patch.object(
+                                    cli.App,
+                                    "start",
+                                    autospec=True,
+                                    side_effect=record_start,
+                                ):
+                                    cli.process_config(
+                                        cli.Configuration(paths=paths, apps=[app])
+                                    )
     return stopped, started
 
 
@@ -1739,8 +1743,13 @@ def test_start_failure_after_update_retries_deploy_next_run(tmpdir: Path) -> Non
         cli.App, "clone_or_pull", autospec=True, side_effect=fake_clone_or_pull
     ):
         with patch.object(cli.App, "is_running", autospec=True, return_value=False):
-            with patch.object(cli.App, "start", autospec=True, side_effect=fake_start):
-                success = cli.process_config(cli.Configuration(paths=paths, apps=[app]))
+            with patch.object(cli.App, "build", autospec=True):
+                with patch.object(
+                    cli.App, "start", autospec=True, side_effect=fake_start
+                ):
+                    success = cli.process_config(
+                        cli.Configuration(paths=paths, apps=[app])
+                    )
 
     assert success is False
     written = json.loads(paths.cache_file.read_text())["app"]
@@ -1754,6 +1763,205 @@ def test_start_failure_after_update_retries_deploy_next_run(tmpdir: Path) -> Non
     stopped, started = _next_run(paths, cache=written, head="rev2")
     assert stopped == ["app"]
     assert started == ["app"]
+
+
+def test_process_config_builds_before_stopping_and_starting(tmpdir: Path) -> None:
+    # A new image must be ready before the old containers stop, so an updated
+    # running app is built first and only then stopped and started.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = _make_cache_app(paths, "app")
+    app.paths.repo_dir.mkdir(parents=True, exist_ok=True)
+    events: List[str] = []
+
+    def record(name: str) -> Any:
+        def side_effect(self: cli.App, *args: Any, **kwargs: Any) -> None:
+            events.append(name)
+
+        return side_effect
+
+    with patch.object(cli.App, "clone_or_pull", autospec=True, return_value=True):
+        with patch.object(
+            cli.App, "check_parameter_changes", autospec=True, return_value=False
+        ):
+            with patch.object(
+                cli.App, "is_running", autospec=True, return_value=True
+            ) as is_running:
+                with patch.object(
+                    cli.App, "build", autospec=True, side_effect=record("build")
+                ):
+                    with patch.object(
+                        cli.App, "stop", autospec=True, side_effect=record("stop")
+                    ):
+                        with patch.object(
+                            cli.App,
+                            "start",
+                            autospec=True,
+                            side_effect=record("start"),
+                        ):
+                            with patch.object(
+                                cli.App,
+                                "get_current_hash",
+                                autospec=True,
+                                return_value="rev2",
+                            ):
+                                success = cli.process_config(
+                                    cli.Configuration(paths=paths, apps=[app])
+                                )
+
+    assert success is True
+    assert events == ["build", "stop", "start"]
+    # The update already implies a restart, so Docker needs no liveness check.
+    is_running.assert_not_called()
+
+
+def test_failed_build_leaves_running_app_up_and_cache_unchanged(
+    tmpdir: Path,
+) -> None:
+    # A failed build must not stop the old containers, and the failed deploy
+    # must not advance deployed_rev, so the next run retries it.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    original = {"deployed_rev": "rev1"}
+    app = _make_cache_app(paths, "app", cache=original)
+    app.paths.repo_dir.mkdir(parents=True, exist_ok=True)
+
+    def failing_build(self: cli.App, *args: Any, **kwargs: Any) -> None:
+        raise Exception("build failed")
+
+    with patch.object(cli.App, "clone_or_pull", autospec=True, return_value=True):
+        with patch.object(
+            cli.App, "check_parameter_changes", autospec=True, return_value=False
+        ):
+            with patch.object(
+                cli.App, "build", autospec=True, side_effect=failing_build
+            ):
+                with patch.object(cli.App, "stop", autospec=True) as stop:
+                    with patch.object(cli.App, "start", autospec=True) as start:
+                        with patch.object(
+                            cli.App,
+                            "get_current_hash",
+                            autospec=True,
+                            return_value="rev2",
+                        ):
+                            success = cli.process_config(
+                                cli.Configuration(paths=paths, apps=[app])
+                            )
+
+    assert success is False
+    stop.assert_not_called()
+    start.assert_not_called()
+    written = json.loads(paths.cache_file.read_text())["app"]
+    assert written == original
+
+
+def test_process_config_leaves_unchanged_running_app_alone(tmpdir: Path) -> None:
+    # An app that is already running the deployed revision needs no Docker
+    # commands at all, so it is neither built nor restarted.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = _make_cache_app(paths, "app")
+    app.paths.repo_dir.mkdir(parents=True, exist_ok=True)
+
+    with patch.object(cli.App, "clone_or_pull", autospec=True, return_value=False):
+        with patch.object(
+            cli.App, "check_parameter_changes", autospec=True, return_value=False
+        ):
+            with patch.object(cli.App, "is_running", autospec=True, return_value=True):
+                with patch.object(cli.App, "build", autospec=True) as build:
+                    with patch.object(cli.App, "stop", autospec=True) as stop:
+                        with patch.object(cli.App, "start", autospec=True) as start:
+                            with patch.object(
+                                cli.App,
+                                "get_current_hash",
+                                autospec=True,
+                                return_value="rev1",
+                            ):
+                                success = cli.process_config(
+                                    cli.Configuration(paths=paths, apps=[app])
+                                )
+
+    assert success is True
+    build.assert_not_called()
+    stop.assert_not_called()
+    start.assert_not_called()
+
+
+def test_process_config_stops_but_does_not_build_a_disabled_app(tmpdir: Path) -> None:
+    # A disabled app is only stopped: there is no new image to prepare.
+    paths = Paths.for_workdir(Path(tmpdir), config_dir=Path(tmpdir))
+    paths.create_directories()
+    app = cli.App(
+        id="app",
+        configuration={"url": "https://example.com/app", "enabled": False},
+        paths=AppPaths.from_paths(paths, "app"),
+        cache={},
+    )
+    app.paths.repo_dir.mkdir(parents=True, exist_ok=True)
+
+    with patch.object(
+        cli.App, "check_parameter_changes", autospec=True, return_value=False
+    ):
+        with patch.object(cli.App, "build", autospec=True) as build:
+            with patch.object(cli.App, "stop", autospec=True) as stop:
+                with patch.object(cli.App, "start", autospec=True) as start:
+                    with patch.object(
+                        cli.App, "is_running", autospec=True
+                    ) as is_running:
+                        success = cli.process_config(
+                            cli.Configuration(paths=paths, apps=[app])
+                        )
+
+    assert success is True
+    build.assert_not_called()
+    stop.assert_called_once()
+    start.assert_not_called()
+    # A disabled app is never started, so its liveness is not checked either.
+    is_running.assert_not_called()
+
+
+def test_build_pulls_and_builds_then_start_runs_up_with_build_without_pulling(
+    tmpdir: Path,
+) -> None:
+    # Build prepares the images before the app stops, then up runs with --build
+    # as a normally cache-hit rebuild, without pulling again.
+    app = _make_image_app(tmpdir, "app")
+    mock_commands, commands = _mock_docker_commands((0, b""))
+
+    with mock_commands:
+        app.build()
+        app.start()
+
+    assert commands == [
+        [
+            "/usr/bin/env",
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.yml",
+            "pull",
+            "--ignore-buildable",
+        ],
+        [
+            "/usr/bin/env",
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.yml",
+            "build",
+        ],
+        [
+            "/usr/bin/env",
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.yml",
+            "up",
+            "--remove-orphans",
+            "--build",
+            "--detach",
+        ],
+    ]
 
 
 def _make_image_app(tmpdir: Path, app_id: str, enabled: bool = True) -> cli.App:

@@ -877,12 +877,19 @@ class App:
                     f"then run Harbormaster again."
                 )
 
-    def start(self, detach=True):
-        """Start the Docker containers for this app."""
-        if self.manage_volumes:
-            self._reconcile_managed_volumes()
+    def build(self, print_output=False):
+        """
+        Pull and build the app's images.
 
-        status = self.ev_run_command_assuming_exitcode_0(
+        The old containers keep running while this happens, so a failed build
+        leaves the app up.
+
+        `docker compose build` builds every platform listed in a service's
+        `build.platforms`, while `up --build` builds only the platform it runs.
+        A Compose file that lists more than one platform therefore needs a
+        builder that can build them all; this is a known limitation.
+        """
+        status, stdout = self.ev_run_command_full(
             [
                 "/usr/bin/env",
                 "docker",
@@ -892,9 +899,37 @@ class App:
                 "--ignore-buildable",
             ],
             self.paths.repo_dir,
-            "Could not pull the Docker image",
+            print_output=print_output,
+        )
+        _postproc_command_assuming_exitcode0(
+            status, stdout, "Could not pull the Docker image"
         )
 
+        status, stdout = self.ev_run_command_full(
+            [
+                "/usr/bin/env",
+                "docker",
+                "compose",
+                *self.compose_config_command,
+                "build",
+            ],
+            self.paths.repo_dir,
+            print_output=print_output,
+        )
+        _postproc_command_assuming_exitcode0(
+            status, stdout, "Could not build the Docker image"
+        )
+
+    def start(self, detach=True):
+        """Start the Docker containers for this app."""
+        if self.manage_volumes:
+            self._reconcile_managed_volumes()
+
+        # build() already built the images, so this is normally a cache hit. It
+        # stays because --build makes Compose use the locally built image for
+        # every buildable service whatever its pull_policy; without it, a
+        # service with image, build and pull_policy: always would pull from the
+        # registry in place of the image build() just made.
         command = [
             "/usr/bin/env",
             "docker",
@@ -1144,19 +1179,26 @@ def process_config(configuration: Configuration, force_restart: bool = False) ->
             parameters_changed = app.check_parameter_changes()
 
             # The app needs to be restarted, or is not enabled, so stop it.
-            if app.repo_dir_exists and (
+            needs_restart = app.repo_dir_exists and (
                 updated_repo or parameters_changed or force_restart or not app.enabled
-            ):
+            )
+            # Decide whether to start before building, so is_running() is still
+            # only called when no restart is already needed.
+            needs_start = app.enabled and (needs_restart or not app.is_running())
+
+            # Pull and build before stopping, so the old containers stay up while
+            # the new images are prepared, and a failed build leaves them running.
+            if needs_start:
+                click.echo(f"{app.id}: Building...")
+                app.build()
+
+            if needs_restart:
                 click.echo(f"{app.id}: Stopping...")
                 app.stop()
-                stopped = True
-            else:
-                stopped = False
 
-            # The app is not running and it should be, so start it.
-            if app.enabled and (stopped or not app.is_running()):
-                app.start()
+            if needs_start:
                 click.echo(f"{app.id}: Starting...")
+                app.start()
             else:
                 click.echo(f"{app.id}: App does not need to be started.")
 
@@ -1835,6 +1877,7 @@ def test(
     )
     app._render_config_vars()
     try:
+        app.build(print_output=True)
         app.start(detach=False)
     except KeyboardInterrupt:
         click.echo("Interrupted container.")

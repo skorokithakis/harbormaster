@@ -106,7 +106,9 @@ Two apps may use the same `url`, with different branches or different
 
 An app is stopped and started again when its repository has new commits, or when
 anything in its config stanza changes (including its environment). Otherwise it is left
-running.
+running. When an app does need to be (re)started, its new images are pulled and built
+before the old containers are stopped, so a pull or build that fails at that point
+leaves the app running.
 
 
 ## Finding the Compose file
@@ -198,10 +200,25 @@ way to mount the app's own repository into a container. It is rarely needed.
   Default `.`.
 - `-f`, `--force-restart` - restart every app, even unchanged ones.
 
-When a run starts an app, it does `docker compose pull --ignore-buildable` and then
-`docker compose up --remove-orphans --build --detach`, in the app's checkout, with `-f`
-for each of the app's Compose files. An app that is running and unchanged is left alone,
-so most runs issue no Compose commands for it at all.
+When a run needs to start or restart an app, it first does `docker compose pull
+--ignore-buildable`, then `docker compose build`, in the app's checkout, with `-f` for
+each of the app's Compose files. The old containers keep running during both, so a
+failed pull or build leaves the app up, on its old version, and the run exits with an
+error. The next run tries again. Only after both succeed does it run `docker compose
+down --remove-orphans` (for a restart; an app that is not running has nothing to stop),
+followed by `docker compose up --remove-orphans --build --detach` with the same `-f`
+files. The images were built moments before, so the `--build` in `up` normally finds
+everything in the build cache, and the app is down only for the stop and the start. That
+second build is a full one when the cache cannot be used, for example with
+`build.no_cache: true`, or when files in the build context changed in between. It then
+takes place while the app is down, and if it fails, the app stays down. An app that is
+running and unchanged is left alone, so most runs issue no Compose commands for it at
+all. A disabled app is only stopped, never built.
+
+`docker compose build` builds every platform in a service's `build.platforms`, where
+`up --build` builds only the platform it runs. If a Compose file lists more than one
+platform there, the Docker builder on the host must be able to build all of them, or the
+app is never updated.
 
 `harbormaster test` - run the Compose app in the current directory, without a
 Harbormaster config file and without committing anything. Use it to check a conversion.

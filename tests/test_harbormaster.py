@@ -87,8 +87,9 @@ def test_one_app(tmp_path: Path, repos: Dict[str, Repository]):
     assert result.exit_code == 0
     assert result.output
     assert output["commands"] == [
-        "/usr/bin/env docker compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker compose -f docker-compose.yml pull --ignore-buildable",
+        "/usr/bin/env docker compose -f docker-compose.yml build",
+        "/usr/bin/env docker compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker compose -f docker-compose.yml up --remove-orphans --build --detach",
     ]
 
@@ -114,8 +115,9 @@ apps:
     assert result.output
     assert output["restarted_apps"] == {"myapp"}
     assert output["commands"] == [
-        "/usr/bin/env docker compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker compose -f docker-compose.yml pull --ignore-buildable",
+        "/usr/bin/env docker compose -f docker-compose.yml build",
+        "/usr/bin/env docker compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker compose -f docker-compose.yml up --remove-orphans --build --detach",
     ]
 
@@ -139,8 +141,9 @@ apps:
     assert result.output
     assert output["restarted_apps"] == {"myapp"}
     assert output["commands"] == [
-        "/usr/bin/env docker compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker compose -f docker-compose.yml pull --ignore-buildable",
+        "/usr/bin/env docker compose -f docker-compose.yml build",
+        "/usr/bin/env docker compose -f docker-compose.yml ps --services --filter status=running",
         "/usr/bin/env docker compose -f docker-compose.yml up --remove-orphans --build --detach",
     ]
 
