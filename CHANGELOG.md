@@ -1,6 +1,18 @@
 # Changelog
 
 
+## [0.5.1](https://github.com/skorokithakis/harbormaster/compare/v0.5.0...v0.5.1) (2026-11-09)
+
+
+### Features
+
+* Build and pull an app's images before stopping it ([e64a853](https://github.com/skorokithakis/harbormaster/commit/e64a8539177f36f1de97fe7ed4d0f81e48cea66c))
+
+
+### Bug Fixes
+
+* Do not restart an app on the run after it failed ([a42f5be](https://github.com/skorokithakis/harbormaster/commit/a42f5bea557f9483675290c7458dc0fc7fab1194))
+
 ## [0.5.0](https://github.com/skorokithakis/harbormaster/compare/v0.4.1...v0.5.0) (2026-10-09)
 
 
