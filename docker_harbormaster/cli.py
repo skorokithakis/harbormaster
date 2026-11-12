@@ -782,7 +782,13 @@ class App:
 
     def is_running(self) -> bool:
         """Check if the app is running."""
-        stdout = self.ev_run_command_full(
+        # The capture helper is used because Docker and Compose write warnings
+        # to stderr while exiting zero; _run_command_full merges stderr into
+        # stdout, so such a warning would make a stopped app look running.
+        # A plain cwd is fine for `ps`: the Compose project name is the
+        # basename of the repo directory, which is the same for the container
+        # symlink and its target, and `ps` does not need bind paths to resolve.
+        returncode, stdout, stderr = _run_command_capture_output(
             [
                 "/usr/bin/env",
                 "docker",
@@ -793,8 +799,17 @@ class App:
                 "--filter",
                 "status=running",
             ],
-            self.paths.repo_dir,
-        )[1].strip()
+            environment=self.environment,
+            chdir=self.paths.repo_dir,
+        )
+
+        if returncode != 0:
+            raise Exception(
+                f'Unable to determine whether app "{self.id}" is running:\n'
+                f"{stderr.decode().strip()}"
+            )
+
+        stdout = stdout.strip()
 
         if stdout:
             debug(f"{self.id} is running.")

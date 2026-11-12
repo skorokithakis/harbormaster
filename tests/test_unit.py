@@ -549,6 +549,33 @@ def test_missing_compose_file_skips_git_retry(tmpdir: Path, capsys: Any) -> None
     assert "compose.yaml" in message
 
 
+def test_is_running_does_not_treat_stderr_as_running(tmpdir: Path) -> None:
+    # Compose writes warnings to stderr while exiting zero. Merging it into
+    # stdout would make a stopped app look running and skip its start.
+    app = _make_compose_test_app(tmpdir)
+    (app.paths.repo_dir / "compose.yaml").write_text("services:\n")
+    warning = b'WARN[0000] The "FOO" variable is not set. Defaulting to a blank string.'
+
+    with patch(
+        "docker_harbormaster.cli._run_command_capture_output",
+        return_value=(0, b"", warning),
+    ):
+        assert app.is_running() is False
+
+    # A failed `ps` is not an empty result: it must surface with the stderr
+    # text, rather than looking like a stopped app.
+    with patch(
+        "docker_harbormaster.cli._run_command_capture_output",
+        return_value=(1, b"", b"Cannot connect to the Docker daemon"),
+    ):
+        with pytest.raises(Exception) as exc_info:
+            app.is_running()
+
+    message = str(exc_info.value)
+    assert "test_app" in message
+    assert "Cannot connect to the Docker daemon" in message
+
+
 def _make_managed_app(tmpdir: Path) -> cli.App:
     tmpdir = Path(tmpdir)
     paths = Paths.for_workdir(tmpdir, config_dir=tmpdir)
