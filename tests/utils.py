@@ -60,8 +60,9 @@ def mkdir(path: Path) -> Path:
 
 
 def _patched_run():
-    """Mock _run_command_full so that we can get the commands."""
+    """Mock the command helpers so that we can get the Compose commands."""
     rcf = cli._run_command_full
+    rcco = cli._run_command_capture_output
 
     commands = []
 
@@ -72,16 +73,23 @@ def _patched_run():
         else:
             return rcf(command, chdir, environment=environment)
 
-    # Return the patched _run_command_full and the list that will eventually hold the
-    # commands.
-    return inner, commands
+    def inner_capture(command, environment=None, chdir=None):
+        # Some Compose calls (eg `ps`) go through the capture helper, which keeps
+        # stderr separate. Record them in the same list, in call order.
+        if "docker" in command and "compose" in command:
+            commands.append(" ".join(command))
+            return 0, b"", b""
+        return rcco(command, environment=environment, chdir=chdir)
+
+    # Return the patched helpers and the list that will eventually hold the commands.
+    return inner, inner_capture, commands
 
 
 def run_harbormaster(
     tmp_path: Path, repos: Dict[str, Repository]
 ) -> Tuple[Any, Dict[str, Any]]:
     """I'm terribly sorry about this, it was the only way."""
-    rcf_mock, commands = _patched_run()
+    rcf_mock, rcco_mock, commands = _patched_run()
     fn_stop = cli.App.stop
     # Prepare a list of the functions' outputs.
     output: Dict[str, Set[str]] = {"restarted_apps": set()}
@@ -91,7 +99,12 @@ def run_harbormaster(
         output["restarted_apps"].add(self.id)
         return fn_stop(self, *args, **kwargs)
 
-    with patch("docker_harbormaster.cli._run_command_full", side_effect=rcf_mock):
+    with (
+        patch("docker_harbormaster.cli._run_command_full", side_effect=rcf_mock),
+        patch(
+            "docker_harbormaster.cli._run_command_capture_output", side_effect=rcco_mock
+        ),
+    ):
         with patch.object(cli.App, "stop", stop_mock):
             runner = CliRunner()
             result = runner.invoke(
