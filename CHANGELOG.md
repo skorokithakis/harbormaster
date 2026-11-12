@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.5.2](https://github.com/skorokithakis/harbormaster/compare/v0.5.1...v0.5.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* Do not treat Compose stderr warnings as a running app ([5199976](https://github.com/skorokithakis/harbormaster/commit/5199976900057bd368bfd70ac83c1967b0defdf7))
+
 ## [0.5.1](https://github.com/skorokithakis/harbormaster/compare/v0.5.0...v0.5.1) (2026-11-09)
 
 
